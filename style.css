@@ -1,20 +1,23 @@
-/* Importa a fonte Inter */
+/* style.css (versão corrigida) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
 body {
     font-family: 'Inter', sans-serif;
-    background-color: #f3f4f6; /* Fundo cinza claro */
+    background-color: #f3f4f6;
+    transition: background-color 0.4s ease;
 }
 
-/* Estilos para o card de flashcard */
 #flashcard-area {
-    perspective: 1000px; /* Cria o contexto 3D para o flip */
+    perspective: 1000px;
 }
 
 .flashcard-flip {
     transform-style: preserve-3d;
-    transition: transform 0.6s;
+    transition: transform 0.7s cubic-bezier(0.4, 0.2, 0.2, 1);
     cursor: pointer;
+    height: 100%;
 }
+
 .flashcard-flip.is-flipped {
     transform: rotateY(180deg);
 }
@@ -23,34 +26,25 @@ body {
     position: absolute;
     width: 100%;
     height: 100%;
-    backface-visibility: hidden; /* Esconde o verso da face frontal */
+    backface-visibility: hidden;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     padding: 2rem;
     border-radius: 1rem;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     background-color: white;
+    top: 0;
+    left: 0;
 }
 
 .flashcard-back {
     transform: rotateY(180deg);
-    background-color: #e2e8f0; /* Fundo ligeiramente mais escuro para o verso */
+    background-color: #f8fafc;
 }
 
-/* Estilos para o feedback visual */
-.notification {
-    transition: background-color 0.3s ease-in-out;
-}
-.correct-bg {
-    background-color: #d1fae5; /* Green 100 - Brilho verde */
-}
-.incorrect-bg {
-    background-color: #fee2e2; /* Red 100 - Brilho vermelho */
-}
+.correct-bg { background-color: #d1fae5; }
+.incorrect-bg { background-color: #fee2e2; }
 
-/* Estilo para a largura 66vw */
-.md\:w-66vw {
-    width: 66vw;
-}
+.md\:w-66vw { width: 66vw; }

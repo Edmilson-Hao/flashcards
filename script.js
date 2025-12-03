@@ -1,636 +1,393 @@
-// #################################################################
-// ################ CONFIGURAÇÃO E AUTENTICAÇÃO FIREBASE ###########
-// #################################################################
+// script.js - VERSÃO CORRIGIDA E FUNCIONAL (2025)
 
-// Importa as funções necessárias do Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, Timestamp, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { 
+    getAuth, 
+    signInWithPopup, 
+    GoogleAuthProvider, 
+    onAuthStateChanged, 
+    signInWithCustomToken, 
+    signInAnonymously, 
+    signOut 
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { 
+    getFirestore, 
+    doc, 
+    setDoc, 
+    getDoc, 
+    updateDoc, 
+    onSnapshot, 
+    collection, 
+    Timestamp, 
+    addDoc, 
+    deleteDoc,
+    query,
+    orderBy
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// Variáveis globais de ambiente (fornecidas pelo Canvas)
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+// Configuração Firebase (funciona local ou no Canvas)
+const firebaseConfig = {
     apiKey: "AIzaSyA_R9qLO_Cj-b2mLGPPQFZPearLS8_ZL78",
     authDomain: "flashcards-6cc04.firebaseapp.com",
     projectId: "flashcards-6cc04",
     storageBucket: "flashcards-6cc04.firebasestorage.app",
     messagingSenderId: "689024752336",
-    appId: "1:689024752336:web:1235587e239187a0ab9cd5",
+    appId: "1:689024752336:web:1235587e239187a0ab9cd5"
 };
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-// Inicializa o Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 const auth = getAuth(app);
-setLogLevel('Debug'); // Habilita logs para depuração
+const db = getFirestore(app);
 
-let currentUserId = null;
-let userDataRef = null; // Referência ao documento do usuário (Coleção)
-let isAuthReady = false; // Flag para indicar que a autenticação foi processada
+let currentUser = null;
+let flashcardsCollectionRef = null;
+let allFlashcards = [];
 
-// Estrutura de repetição espaçada (Curva de Ebbinghaus simplificada)
-const EBBINGHAUS_INTERVALS_DAYS = [0, 1, 2, 4, 7, 15, 30, 90, 180, 365];
+// Intervalos Ebbinghaus (em dias)
+const EBBINGHAUS_INTERVALS = [0, 1, 2, 4, 7, 15, 30, 90, 180, 365];
 
-/**
- * Gera a próxima data de revisão com base no nível atual.
- * @param {number} currentLevel Nível atual (0 a N)
- * @returns {Date} A próxima data de revisão.
- */
-function getNextReviewDate(currentLevel) {
-    const level = Math.min(currentLevel, EBBINGHAUS_INTERVALS_DAYS.length - 1);
-    const days = EBBINGHAUS_INTERVALS_DAYS[level];
-    const nextDate = new Date();
-    nextDate.setDate(nextDate.getDate() + days);
-    return nextDate;
+function getNextReviewDate(level) {
+    const days = EBBINGHAUS_INTERVALS[Math.min(level, EBBINGHAUS_INTERVALS.length - 1)];
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return date;
 }
 
-/**
- * Autentica o usuário usando o token customizado ou anonimamente.
- */
-async function authenticateUser() {
-    try {
-        if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-            console.log("Login com token customizado concluído.");
-        } else {
-            // Em ambiente local ou sem token, usa login anônimo
-            await signInAnonymously(auth);
-            console.log("Login anônimo concluído.");
-        }
-    } catch (error) {
-        console.error("Erro na autenticação inicial:", error);
-    }
-}
-
-// Observador de estado de autenticação
-onAuthStateChanged(auth, (user) => {
-    isAuthReady = true; // A autenticação foi processada
-
+// =================== AUTENTICAÇÃO ===================
+onAuthStateChanged(auth, async (user) => {
+    currentUser = user;
     if (user) {
-        currentUserId = user.uid;
-        // Define o caminho para os dados do usuário
-        const userFlashcardPath = `/artifacts/${appId}/users/${currentUserId}/flashcards`;
-        userDataRef = doc(db, userFlashcardPath, "data");
+        document.getElementById('user-display').textContent = user.displayName || "Anônimo";
+        document.getElementById('user-id-display').textContent = user.uid.substring(0, 8) + "...";
 
-        // Atualiza a exibição do usuário
-        document.getElementById('user-display').textContent = user.displayName || 'Anônimo';
-        document.getElementById('user-id-display').textContent = currentUserId;
-
-        // Tenta carregar os dados/coleção do usuário ou inicializa
-        loadUserDataAndNavigate();
-
+        // CORREÇÃO PRINCIPAL: caminho correto da coleção
+        flashcardsCollectionRef = collection(db, "users", user.uid, "flashcards");
+        
+        setupRealtimeListener();
+        showView('view-home');
     } else {
-        currentUserId = null;
-        // Se não houver usuário e a autenticação estiver pronta, exibe o login
         showView('view-login');
     }
+    hideLoading();
 });
 
-/**
- * Tenta carregar os dados/coleção do usuário ou inicializa.
- */
-async function loadUserDataAndNavigate() {
+async function tryAnonymousLogin() {
     try {
-        const docSnap = await getDoc(userDataRef);
-
-        if (!docSnap.exists()) {
-            // Inicializa a coleção/documento do usuário
-            const initialData = {
-                name: auth.currentUser.displayName || 'Usuário Anônimo',
-                email: auth.currentUser.email || 'N/A',
-                createdAt: Timestamp.now(),
-            };
-            await setDoc(userDataRef, initialData);
-            console.log("Documento de usuário inicializado.");
-        }
-
-        // Inicia o listener de flashcards e navega para a home
-        setupFlashcardsListener();
-        showView('view-home');
-
-    } catch (error) {
-        console.error("Erro ao carregar ou inicializar dados do usuário:", error);
-        // Em caso de erro grave, mostra o login
-        showView('view-login');
+        await signInAnonymously(auth);
+    } catch (err) {
+        console.error("Erro login anônimo:", err);
     }
 }
 
-// #################################################################
-// ################### CONTROLE DE VISUALIZAÇÃO ####################
-// #################################################################
-
-const views = document.querySelectorAll('.view');
-/**
- * Mostra uma view específica e esconde todas as outras.
- * @param {string} viewId O ID da view a ser exibida (ex: 'view-login').
- */
+// =================== NAVEGAÇÃO ===================
 function showView(viewId) {
-    views.forEach(view => {
-        view.classList.add('hidden');
-    });
+    document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     document.getElementById(viewId).classList.remove('hidden');
-    // Remove as classes de feedback de fundo ao mudar de tela
     document.body.classList.remove('correct-bg', 'incorrect-bg');
-    if (viewId === 'view-revisao') {
-        loadFlashcardForReview();
-    }
-    if (viewId === 'view-biblioteca') {
-        renderBiblioteca();
-    }
+
+    if (viewId === 'view-revisao') loadNextCard();
+    if (viewId === 'view-biblioteca') renderLibrary();
 }
 
-// #################################################################
-// ##################### GERENCIAMENTO DE CARDS ####################
-// #################################################################
+function hideLoading() {
+    document.getElementById('view-loading').classList.add('hidden');
+}
 
-let allFlashcards = [];
-let flashcardsCollectionRef = null;
-
-/**
- * Configura o listener em tempo real para todos os flashcards do usuário.
- */
-function setupFlashcardsListener() {
-    if (!currentUserId) return;
-
-    const cardsPath = `/artifacts/${appId}/users/${currentUserId}/flashcards/cards`;
-    flashcardsCollectionRef = collection(db, cardsPath);
+// =================== REALTIME LISTENER ===================
+function setupRealtimeListener() {
+    if (!flashcardsCollectionRef) return;
 
     onSnapshot(flashcardsCollectionRef, (snapshot) => {
         allFlashcards = [];
         snapshot.forEach(doc => {
-            const card = doc.data();
-            card.id = doc.id;
-            if (card.nextReview instanceof Timestamp) {
-                card.nextReview = card.nextReview.toDate();
-            }
-            allFlashcards.push(card);
+            const data = doc.data();
+            data.id = doc.id;
+            if (data.nextReview) data.nextReview = data.nextReview.toDate();
+            allFlashcards.push(data);
         });
-        console.log(`Total de Flashcards carregados: ${allFlashcards.length}`);
+        console.log("Cards carregados:", allFlashcards.length);
 
         if (!document.getElementById('view-biblioteca').classList.contains('hidden')) {
-            renderBiblioteca();
+            renderLibrary();
         }
         if (!document.getElementById('view-revisao').classList.contains('hidden')) {
-            loadFlashcardForReview();
+            loadNextCard();
         }
-    }, (error) => {
-        console.error("Erro ao ouvir a coleção de flashcards:", error);
-        document.getElementById('biblioteca-message').textContent = 'Erro ao carregar os dados.';
     });
 }
 
-/**
- * Salva um novo flashcard no Firestore.
- * @param {object} cardData Dados do flashcard (idioma, palavra, traducao, exemplos).
- */
+// =================== ADICIONAR CARDS ===================
 async function saveFlashcard(cardData) {
-    if (!flashcardsCollectionRef) {
-        console.error("Coleção de flashcards não inicializada.");
-        return false;
-    }
-
-    const newCard = {
-        ...cardData,
-        reviewLevel: 0,
-        nextReview: Timestamp.fromDate(getNextReviewDate(0)),
-        createdAt: Timestamp.now(),
-        // Inicializa contadores
-        totalReviews: 0,
-        correctCount: 0,
-    };
-
     try {
+        const newCard = {
+            ...cardData,
+            reviewLevel: 0,
+            nextReview: Timestamp.fromDate(getNextReviewDate(0)),
+            createdAt: Timestamp.now(),
+            totalReviews: 0,
+            correctCount: 0
+        };
         await addDoc(flashcardsCollectionRef, newCard);
         return true;
-    } catch (error) {
-        console.error("Erro ao salvar o flashcard:", error);
+    } catch (err) {
+        console.error("Erro ao salvar card:", err);
         return false;
     }
 }
 
-// #################################################################
-// ################### LÓGICA DE REVISÃO (EBBINGHAUS) ##############
-// #################################################################
-
-let cardsToReview = [];
+// =================== REVISÃO ===================
 let currentCard = null;
-let isCardFlipped = false;
-let correctAnswer = '';
+let isFlipped = false;
 
-/**
- * Carrega o próximo flashcard para revisão.
- */
-function loadFlashcardForReview() {
-    document.getElementById('revisao-message').textContent = 'Carregando cards para revisão...';
-    document.getElementById('flashcard-container').classList.remove('is-flipped');
-    
-    // 1. Filtra cards prontos para revisão
+function loadNextCard() {
     const now = new Date();
-    cardsToReview = allFlashcards
-        .filter(card => card.nextReview <= now)
+    const due = allFlashcards
+        .filter(c => c.nextReview <= now)
         .sort((a, b) => a.nextReview - b.nextReview);
 
-    if (cardsToReview.length === 0) {
-        document.getElementById('card-idioma-front').textContent = '';
-        document.getElementById('card-palavra-front').textContent = 'Nenhum card para revisar hoje!';
-        document.getElementById('revisao-message').textContent = 'Parabéns! Você revisou todos os cards por hoje. Volte mais tarde.';
+    if (due.length === 0) {
+        document.getElementById('card-palavra-front').textContent = "Nenhum card para revisar hoje!";
+        document.getElementById('card-idioma-front').textContent = "Parabéns!";
+        document.getElementById('revisao-message').textContent = "Volte amanhã!";
         document.getElementById('quiz-options-container').classList.add('hidden');
         document.getElementById('quiz-typing-container').classList.add('hidden');
-        document.getElementById('review-result-controls').classList.add('hidden');
         return;
     }
 
-    currentCard = cardsToReview[0];
-    document.getElementById('revisao-message').textContent = `${cardsToReview.length} card(s) pendente(s) para revisão.`;
-
-    // 2. Reseta o estado do card
-    isCardFlipped = false;
+    currentCard = due[0];
+    isFlipped = false;
+    document.getElementById('flashcard-container').classList.remove('is-flipped');
     document.body.classList.remove('correct-bg', 'incorrect-bg');
-    document.getElementById('review-result-controls').classList.add('hidden');
-    document.getElementById('typing-message').textContent = '';
 
-    // 3. Preenche a interface
-    correctAnswer = currentCard.traducao;
-
-    // Frente do Card
     document.getElementById('card-idioma-front').textContent = currentCard.idioma;
     document.getElementById('card-palavra-front').textContent = currentCard.palavra;
-
-    // Verso do Card
     document.getElementById('card-traducao-back').textContent = currentCard.traducao;
+
     const exemplosList = document.getElementById('card-exemplos-back');
     exemplosList.innerHTML = '';
-    (Array.isArray(currentCard.exemplos) ? currentCard.exemplos : []).forEach(ex => {
+    (currentCard.exemplos || []).forEach(ex => {
         const li = document.createElement('li');
         li.textContent = ex;
         exemplosList.appendChild(li);
     });
 
+    document.getElementById('revisao-message').textContent = `${due.length} card(s) para revisar hoje.`;
 
-    // 4. Determina o modo de revisão (Quiz ou Digitação)
-    const useTypingMode = currentCard.reviewLevel >= 3;
-
-    if (useTypingMode) {
-        // Modo Digitação
+    // Modo digitação após nível 3
+    if (currentCard.reviewLevel >= 3) {
         document.getElementById('quiz-options-container').classList.add('hidden');
         document.getElementById('quiz-typing-container').classList.remove('hidden');
-        document.getElementById('typing-input').value = '';
+        document.getElementById('typing-input').focus();
     } else {
-        // Modo Múltipla Escolha
-        document.getElementById('quiz-options-container').classList.remove('hidden');
         document.getElementById('quiz-typing-container').classList.add('hidden');
-        setupQuizOptions();
+        document.getElementById('quiz-options-container').classList.remove('hidden');
+        setupMultipleChoice();
     }
 }
 
-/**
- * Monta as opções de múltipla escolha.
- */
-function setupQuizOptions() {
-    const incorrectOptions = allFlashcards
-        .filter(card => card.id !== currentCard.id)
-        .map(card => card.traducao);
+function setupMultipleChoice() {
+    const others = allFlashcards
+        .filter(c => c.id !== currentCard.id)
+        .map(c => c.traducao);
+    
+    const wrong = others.sort(() => 0.5 - Math.random()).slice(0, 3);
+    const options = [currentCard.traducao, ...wrong].sort(() => 0.5 - Math.random());
 
-    const shuffledIncorrect = shuffleArray(incorrectOptions).slice(0, 3);
-    let allPossibleAnswers = shuffleArray([correctAnswer, ...shuffledIncorrect]);
-
-    while (allPossibleAnswers.length < 4) {
-        allPossibleAnswers.push("Opção Falsa " + (Math.random() * 100).toFixed(0));
-    }
-    allPossibleAnswers = allPossibleAnswers.slice(0, 4);
-
-    const optionButtons = document.querySelectorAll('.quiz-option-btn');
-    optionButtons.forEach((btn, index) => {
-        btn.textContent = allPossibleAnswers[index];
-        btn.disabled = false;
-        btn.classList.remove('bg-green-100', 'bg-red-100', 'border-green-500', 'border-red-500');
-        btn.classList.add('bg-gray-50', 'border-gray-200');
+    document.querySelectorAll('.quiz-option-btn').forEach((btn, i) => {
+        btn.textContent = options[i];
+        btn.onclick = () => checkAnswer(options[i]);
     });
 }
 
-/**
- * Inverte o card para mostrar a tradução e os detalhes.
- * @param {boolean} isCorrect Indica se o usuário acertou ou errou.
- */
-function flipCard(isCorrect) {
-    if (isCardFlipped) return;
-    isCardFlipped = true;
+function checkAnswer(answer) {
+    if (isFlipped) return;
+    const correct = answer.trim().toLowerCase() === currentCard.traducao.trim().toLowerCase();
+    flipCard(correct);
+    updateReviewLevel(correct);
+}
+
+function flipCard(correct) {
+    isFlipped = true;
     document.getElementById('flashcard-container').classList.add('is-flipped');
-
-    document.body.classList.add(isCorrect ? 'correct-bg' : 'incorrect-bg');
-    document.body.classList.remove(isCorrect ? 'incorrect-bg' : 'correct-bg');
-
+    document.body.classList.add(correct ? 'correct-bg' : 'incorrect-bg');
+    document.getElementById('review-result-controls').classList.remove('hidden');
     document.getElementById('quiz-options-container').classList.add('hidden');
     document.getElementById('quiz-typing-container').classList.add('hidden');
-    document.getElementById('review-result-controls').classList.remove('hidden');
 }
 
-/**
- * Atualiza o nível de revisão do flashcard.
- * @param {boolean} isCorrect Se o usuário acertou o card.
- */
-async function updateCardReviewStatus(isCorrect) {
-    if (!currentCard || !flashcardsCollectionRef) return;
+async function updateReviewLevel(correct) {
+    const newLevel = correct 
+        ? Math.min(currentCard.reviewLevel + 1, 9)
+        : Math.max(0, currentCard.reviewLevel - 1);
 
-    let newLevel = currentCard.reviewLevel;
-    if (isCorrect) {
-        newLevel = Math.min(newLevel + 1, EBBINGHAUS_INTERVALS_DAYS.length - 1);
-    } else {
-        newLevel = Math.max(0, newLevel - 1);
-    }
-
-    const nextReviewDate = getNextReviewDate(newLevel);
+    const nextDate = getNextReviewDate(newLevel);
 
     try {
-        const cardRef = doc(flashcardsCollectionRef, currentCard.id);
-        await updateDoc(cardRef, {
+        await updateDoc(doc(flashcardsCollectionRef, currentCard.id), {
             reviewLevel: newLevel,
-            nextReview: Timestamp.fromDate(nextReviewDate),
+            nextReview: Timestamp.fromDate(nextDate),
             lastReviewed: Timestamp.now(),
             totalReviews: (currentCard.totalReviews || 0) + 1,
-            correctCount: (currentCard.correctCount || 0) + (isCorrect ? 1 : 0),
+            correctCount: (currentCard.correctCount || 0) + (correct ? 1 : 0)
         });
-        console.log(`Card ${currentCard.id} atualizado. Nível: ${newLevel}`);
-    } catch (error) {
-        console.error("Erro ao atualizar o status de revisão:", error);
+    } catch (err) {
+        console.error("Erro ao atualizar revisão:", err);
     }
 }
 
-// #################################################################
-// ################### LÓGICA DA BIBLIOTECA ########################
-// #################################################################
-
-/**
- * Renderiza a lista de todos os flashcards na view Biblioteca.
- */
-function renderBiblioteca() {
+// =================== BIBLIOTECA ===================
+function renderLibrary() {
     const tbody = document.getElementById('biblioteca-table-body');
-    const message = document.getElementById('biblioteca-message');
+    const msg = document.getElementById('biblioteca-message');
     tbody.innerHTML = '';
 
-    if (!isAuthReady || allFlashcards.length === 0) {
-        message.textContent = isAuthReady ? 'Nenhum flashcard cadastrado ainda.' : 'Carregando dados...';
-        message.classList.remove('hidden');
+    if (allFlashcards.length === 0) {
+        msg.textContent = "Nenhum flashcard cadastrado ainda.";
+        msg.classList.remove('hidden');
         return;
     }
+    msg.classList.add('hidden');
 
-    message.classList.add('hidden');
+    const sorted = [...allFlashcards].sort((a, b) => a.palavra.localeCompare(b.palavra));
 
-    const sortedCards = [...allFlashcards].sort((a, b) => a.palavra.localeCompare(b.palavra));
-
-    sortedCards.forEach((card, index) => {
+    sorted.forEach((card, i) => {
         const tr = document.createElement('tr');
-        tr.classList.add('hover:bg-gray-50');
-
-        const levelText = `Nível ${card.reviewLevel}`;
-        let levelColor = 'text-gray-700';
-        if (card.reviewLevel >= 5) levelColor = 'text-green-600 font-bold';
-        else if (card.reviewLevel >= 2) levelColor = 'text-blue-600';
-        else levelColor = 'text-red-600';
-
-        const nextReviewDate = card.nextReview instanceof Date ? card.nextReview.toLocaleDateString() : 'N/A';
-
         tr.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${index + 1}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${card.idioma}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">${card.palavra}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm ${levelColor}">${levelText}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${nextReviewDate}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                <button data-card-id="${card.id}" class="btn-delete-card text-red-500 hover:text-red-700">Excluir</button>
+            <td class="px-6 py-4 text-sm">${i + 1}</td>
+            <td class="px-6 py-4 text-sm">${card.idioma}</td>
+            <td class="px-6 py-4 text-sm font-medium text-indigo-600">${card.palavra}</td>
+            <td class="px-6 py-4 text-sm ${card.reviewLevel >= 5 ? 'text-green-600 font-bold' : card.reviewLevel >= 2 ? 'text-blue-600' : 'text-red-600'}">
+                Nível ${card.reviewLevel}
+            </td>
+            <td class="px-6 py-4 text-sm">${card.nextReview?.toLocaleDateString() || 'N/A'}</td>
+            <td class="px-6 py-4 text-sm">
+                <button data-id="${card.id}" class="btn-delete-card text-red-600 hover:text-red-800 text-sm">Excluir</button>
             </td>
         `;
         tbody.appendChild(tr);
     });
 
-    document.querySelectorAll('.btn-delete-card').forEach(button => {
-        button.onclick = (e) => {
-             // Usando confirm provisoriamente, idealmente seria um modal customizado
-            if (window.confirm("Tem certeza de que deseja excluir este flashcard?")) {
-                deleteCard(e.target.dataset.cardId);
+    document.querySelectorAll('.btn-delete-card').forEach(btn => {
+        btn.onclick = async () => {
+            if (confirm("Excluir este flashcard permanentemente?")) {
+                await deleteDoc(doc(flashcardsCollectionRef, btn.dataset.id));
             }
         };
     });
 }
 
-/**
- * Exclui um flashcard do Firestore.
- * @param {string} cardId O ID do documento a ser excluído.
- */
-async function deleteCard(cardId) {
-    if (!flashcardsCollectionRef) return;
-    try {
-        const cardRef = doc(flashcardsCollectionRef, cardId);
-        await deleteDoc(cardRef);
-        console.log(`Card ${cardId} excluído com sucesso.`);
-    } catch (error) {
-        console.error("Erro ao excluir o card:", error);
-    }
-}
+// =================== EVENT LISTENERS ===================
+document.getElementById('btn-login-google').onclick = () => {
+    signInWithPopup(auth, new GoogleAuthProvider());
+};
 
+document.getElementById('btn-logout').onclick = () => signOut(auth);
 
-// #################################################################
-// ########################## UTILIDADES ###########################
-// #################################################################
+document.getElementById('btn-home-adicionar').onclick = () => showView('view-add-menu');
+document.getElementById('btn-home-revisar').onclick = () => showView('view-revisao');
+document.getElementById('btn-home-biblioteca').onclick = () => showView('view-biblioteca');
 
-/**
- * Embaralha um array usando o algoritmo Fisher-Yates.
- */
-function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
+document.getElementById('btn-add-manual').onclick = () => showView('view-add-manual');
+document.getElementById('btn-add-automatico').onclick = () => showView('view-add-automatico');
 
-
-// #################################################################
-// ##################### EVENT LISTENERS ###########################
-// #################################################################
-
-// 1. LOGIN
-document.getElementById('btn-login-google').addEventListener('click', async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-        await signInWithPopup(auth, provider);
-        // onAuthStateChanged cuidará da navegação
-    } catch (error) {
-        const errorMessage = error.message.includes('popup-closed-by-user') ?
-            'Login cancelado pelo usuário.' :
-            `Erro ao fazer login: ${error.code}`;
-        document.getElementById('login-message').textContent = errorMessage;
-        document.getElementById('login-message').classList.remove('hidden');
-        console.error("Erro de login:", error);
-    }
+document.querySelectorAll('[id^="btn-back-from-"]').forEach(btn => {
+    btn.onclick = () => showView('view-home');
 });
+document.getElementById('btn-back-from-add-menu').onclick = () => showView('view-home');
 
-document.getElementById('btn-logout').addEventListener('click', async () => {
-    try {
-        await signOut(auth);
-    } catch (error) {
-        console.error("Erro ao fazer logout:", error);
-    }
-});
-
-// 2. HOME (NAVEGAÇÃO)
-document.getElementById('btn-home-adicionar').addEventListener('click', () => showView('view-add-menu'));
-document.getElementById('btn-home-revisar').addEventListener('click', () => showView('view-revisao'));
-document.getElementById('btn-home-biblioteca').addEventListener('click', () => showView('view-biblioteca'));
-
-// 3. ADICIONAR CARDS (SUB-MENU)
-document.getElementById('btn-add-manual').addEventListener('click', () => showView('view-add-manual'));
-document.getElementById('btn-add-automatico').addEventListener('click', () => showView('view-add-automatico'));
-document.getElementById('btn-back-from-add-menu').addEventListener('click', () => showView('view-home'));
-
-// 3a. ADICIONAR MANUAL
-document.getElementById('btn-back-from-manual').addEventListener('click', () => showView('view-add-menu'));
-
+// Adicionar Manual (VERSÃO CORRIGIDA - LINHA ~302)
 document.getElementById('form-add-manual').addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // CORREÇÃO: Usa getElementById direto para evitar problemas com form.elements
     const idioma = document.getElementById('manual-idioma').value.trim();
     const palavra = document.getElementById('manual-palavra').value.trim();
     const traducao = document.getElementById('manual-traducao').value.trim();
     const exemplosStr = document.getElementById('manual-exemplos').value.trim();
 
-    const exemplos = exemplosStr.split(';').map(ex => ex.trim()).filter(ex => ex.length > 0);
+    // Validação
+    if (!idioma || !palavra || !traducao) {
+        const msg = document.getElementById('manual-message');
+        msg.textContent = 'Preencha idioma, palavra e tradução.';
+        msg.className = 'mt-4 text-red-600 font-bold';
+        return;
+    }
 
-    if (!idioma || !palavra || !traducao || exemplos.length === 0) {
-        const messageEl = document.getElementById('manual-message');
-        messageEl.textContent = 'Preencha todos os campos obrigatórios.';
-        messageEl.classList.add('text-red-500');
+    const exemplos = exemplosStr.split(';').map(s => s.trim()).filter(Boolean);
+    if (exemplos.length === 0) {
+        const msg = document.getElementById('manual-message');
+        msg.textContent = 'Adicione pelo menos um exemplo (separados por ";").';
+        msg.className = 'mt-4 text-red-600 font-bold';
         return;
     }
 
     const cardData = { idioma, palavra, traducao, exemplos };
+
+    const msg = document.getElementById('manual-message');
     const success = await saveFlashcard(cardData);
-    const messageEl = document.getElementById('manual-message');
-
+    
     if (success) {
-        messageEl.textContent = 'Flashcard salvo com sucesso!';
-        messageEl.classList.add('text-green-500');
-        messageEl.classList.remove('text-red-500');
-        document.getElementById('form-add-manual').reset();
+        msg.textContent = '✅ Flashcard salvo com sucesso!';
+        msg.className = 'mt-4 text-green-600 font-bold';
+        document.getElementById('form-add-manual').reset(); // Limpa o form
+        setTimeout(() => { msg.textContent = ''; }, 3000); // Limpa mensagem após 3s
     } else {
-        messageEl.textContent = 'Erro ao salvar o flashcard. Tente novamente.';
-        messageEl.classList.add('text-red-500');
-        messageEl.classList.remove('text-green-500');
+        msg.textContent = '❌ Erro ao salvar. Tente novamente.';
+        msg.className = 'mt-4 text-red-600 font-bold';
     }
 });
 
-// 3b. ADICIONAR AUTOMÁTICO
-document.getElementById('btn-back-from-automatico').addEventListener('click', () => showView('view-add-menu'));
-
-document.getElementById('btn-processar-json').addEventListener('click', async () => {
-    const jsonInput = document.getElementById('automatico-json-input').value.trim();
-    const messageEl = document.getElementById('automatico-message');
-    messageEl.textContent = 'Processando...';
-    messageEl.classList.remove('text-red-500', 'text-green-500');
-
-    if (!jsonInput) {
-        messageEl.textContent = 'Cole o JSON antes de processar.';
-        messageEl.classList.add('text-red-500');
-        return;
+// Flip ao clicar no card
+document.getElementById('flashcard-container').onclick = () => {
+    if (!isFlipped && currentCard && currentCard.reviewLevel >= 3) {
+        document.getElementById('typing-input').focus();
     }
-
-    try {
-        const cardsArray = JSON.parse(jsonInput);
-        if (!Array.isArray(cardsArray)) {
-            throw new Error("O conteúdo deve ser um array JSON.");
-        }
-
-        let savedCount = 0;
-        for (const card of cardsArray) {
-            if (card.idioma && card.palavra && card.traducao && Array.isArray(card.exemplos) && card.exemplos.length > 0) {
-                const cardData = {
-                    idioma: card.idioma,
-                    palavra: card.palavra,
-                    traducao: card.traducao,
-                    exemplos: card.exemplos,
-                };
-                const success = await saveFlashcard(cardData);
-                if (success) savedCount++;
-            } else {
-                console.warn("Card JSON inválido ignorado:", card);
-            }
-        }
-
-        document.getElementById('automatico-json-input').value = '';
-        messageEl.textContent = `${savedCount} card(s) salvo(s) com sucesso! ${cardsArray.length - savedCount} card(s) ignorado(s) por serem inválidos.`;
-        messageEl.classList.add('text-green-500');
-
-    } catch (error) {
-        messageEl.textContent = `Erro ao processar JSON: ${error.message}`;
-        messageEl.classList.add('text-red-500');
-        console.error("Erro ao processar JSON:", error);
-    }
-});
-
-// 4. REVISÃO (QUIZ/TYPING)
-document.getElementById('btn-back-from-revisao').addEventListener('click', () => showView('view-home'));
-
-// Múltipla Escolha
-document.querySelectorAll('.quiz-option-btn').forEach(button => {
-    button.addEventListener('click', (e) => {
-        if (isCardFlipped || !currentCard) return;
-
-        const selectedAnswer = e.target.textContent;
-        const isCorrect = selectedAnswer === correctAnswer;
-
-        document.querySelectorAll('.quiz-option-btn').forEach(btn => {
-            btn.disabled = true;
-            if (btn.textContent === correctAnswer) {
-                btn.classList.add('bg-green-100', 'border-green-500');
-                btn.classList.remove('bg-gray-50', 'border-gray-200');
-            } else if (btn.textContent === selectedAnswer) {
-                btn.classList.add('bg-red-100', 'border-red-500');
-                btn.classList.remove('bg-gray-50', 'border-gray-200');
-            }
-        });
-
-        flipCard(isCorrect);
-        updateCardReviewStatus(isCorrect);
-    });
-});
+};
 
 // Digitação
-document.getElementById('typing-submit-btn').addEventListener('click', () => {
-    if (isCardFlipped || !currentCard) return;
+document.getElementById('typing-submit-btn').onclick = () => {
+    const input = document.getElementById('typing-input').value.trim();
+    const msg = document.getElementById('typing-message');
+    if (!input) return;
 
-    const typedAnswer = document.getElementById('typing-input').value.trim();
-    // Verifica a correção ignorando capitalização para simplicidade na digitação
-    const isCorrect = typedAnswer.toLowerCase() === correctAnswer.toLowerCase();
-    const messageEl = document.getElementById('typing-message');
+    const correct = input.toLowerCase() === currentCard.traducao.toLowerCase();
+    msg.textContent = correct ? "Correto!" : `Errado. Resposta: ${currentCard.traducao}`;
+    msg.className = correct ? "text-green-600" : "text-red-600";
+    flipCard(correct);
+    updateReviewLevel(correct);
+};
 
-    if (!typedAnswer) {
-        messageEl.textContent = "Digite algo para verificar.";
-        messageEl.classList.add('text-red-500');
-        return;
+// Próximo card
+document.getElementById('btn-next-card').onclick = loadNextCard;
+
+// JSON em massa
+document.getElementById('btn-processar-json').onclick = async () => {
+    const txt = document.getElementById('automatico-json-input');
+    const msg = document.getElementById('automatico-message');
+    try {
+        const arr = JSON.parse(txt.value);
+        if (!Array.isArray(arr)) throw new Error("Deve ser um array");
+
+        let ok = 0;
+        for (const c of arr) {
+            if (c.idioma && c.palavra && c.traducao && Array.isArray(c.exemplos)) {
+                await saveFlashcard(c);
+                ok++;
+            }
+        }
+        msg.textContent = `${ok} cards salvos com sucesso!`;
+        msg.className = "text-green-600";
+        txt.value = "";
+    } catch (err) {
+        msg.textContent = "JSON inválido: " + err.message;
+        msg.className = "text-red-600";
     }
+};
 
-    messageEl.classList.remove('text-red-500', 'text-green-600', 'text-red-600');
-    messageEl.textContent = isCorrect ? "Correto!" : `Incorreto. A tradução correta é: "${correctAnswer}"`;
-    messageEl.classList.add(isCorrect ? 'text-green-600' : 'text-red-600');
-
-    flipCard(isCorrect);
-    updateCardReviewStatus(isCorrect);
-});
-
-// Próximo Card (após flip)
-document.getElementById('btn-next-card').addEventListener('click', () => {
-    loadFlashcardForReview();
-});
-
-
-// 5. BIBLIOTECA
-document.getElementById('btn-back-from-biblioteca').addEventListener('click', () => showView('view-home'));
-
-
-// #################################################################
-// ################## INICIALIZAÇÃO DA APLICAÇÃO ###################
-// #################################################################
-
-// Tenta autenticar ao carregar a página
-authenticateUser();
+// Inicialização
+window.onload = () => {
+    // Tenta login anônimo se não houver token
+    if (!auth.currentUser) {
+        tryAnonymousLogin();
+    }
+};
