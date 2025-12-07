@@ -142,12 +142,18 @@ let isFlipped = false;
 let currentDirection = 'forward';
 
 function setupReviewSession() {
+    console.log("=== INICIANDO SESSÃO DE REVISÃO ===");
+    
+    // Inicializar estatísticas da sessão
+    initSessionStats();
+    
     const now = new Date();
     
     if (isForcedSession) {
         currentReviewSession = allFlashcards
             .filter(card => card.reviewLevel < 9)
             .sort(() => 0.5 - Math.random());
+        console.log("Sessão forçada:", currentReviewSession.length, "cards");
     } else {
         currentReviewSession = allFlashcards
             .filter(c => {
@@ -160,6 +166,7 @@ function setupReviewSession() {
                 const dateB = b.nextReview instanceof Date ? b.nextReview : b.nextReview.toDate();
                 return dateA - dateB;
             });
+        console.log("Sessão normal:", currentReviewSession.length, "cards vencidos");
     }
     
     currentSessionIndex = 0;
@@ -168,23 +175,11 @@ function setupReviewSession() {
     updateReviewCounter();
     
     if (currentReviewSession.length === 0) {
-        const cardFront = document.getElementById('card-palavra-front');
-        const revisaoMessage = document.getElementById('revisao-message');
-        
-        if (cardFront && revisaoMessage) {
-            if (isForcedSession) {
-                cardFront.textContent = "Todos os cards já estão no nível máximo!";
-                revisaoMessage.textContent = "Parabéns! Você dominou todos os cards.";
-            } else {
-                cardFront.textContent = "Nenhum card para revisar hoje!";
-                revisaoMessage.textContent = "Volte amanhã ou inicie uma nova rodada.";
-            }
-        }
-        
-        hideQuizControls();
+        console.log("Nenhum card para revisar");
         return false;
     }
     
+    console.log("Sessão configurada com sucesso");
     return true;
 }
 
@@ -228,6 +223,219 @@ function updateReviewCounter() {
     }
 }
 
+// =================== RESUMO DA REVISÃO ===================
+
+function showReviewSummary() {
+    console.log("Mostrando resumo da revisão...");
+    
+    // Obter estatísticas da sessão
+    const statsStr = sessionStorage.getItem('reviewStats');
+    const stats = statsStr ? JSON.parse(statsStr) : { total: 0, correct: 0, cards: [] };
+    
+    const totalCards = stats.total || 0;
+    const correctCards = stats.correct || 0;
+    const incorrectCards = totalCards - correctCards;
+    const accuracy = totalCards > 0 ? Math.round((correctCards / totalCards) * 100) : 0;
+    
+    console.log("Estatísticas da sessão:", { totalCards, correctCards, accuracy });
+    
+    // Obter a view de revisão
+    const reviewView = document.getElementById('view-revisao');
+    if (!reviewView) {
+        console.error("View de revisão não encontrada");
+        return;
+    }
+    
+    // Determinar mensagem baseada na precisão
+    let emoji, message, colorClass;
+    if (accuracy >= 90) {
+        emoji = '🏆';
+        message = 'Excelente! Seu domínio está impressionante!';
+        colorClass = 'text-green-400';
+    } else if (accuracy >= 75) {
+        emoji = '🎯';
+        message = 'Muito bom! Continue assim!';
+        colorClass = 'text-green-300';
+    } else if (accuracy >= 60) {
+        emoji = '👍';
+        message = 'Bom trabalho! A prática leva à perfeição.';
+        colorClass = 'text-yellow-300';
+    } else if (accuracy >= 40) {
+        emoji = '😐';
+        message = 'Continue praticando! Você está melhorando.';
+        colorClass = 'text-yellow-400';
+    } else {
+        emoji = '💪';
+        message = 'Não desista! Cada erro é uma oportunidade de aprender.';
+        colorClass = 'text-red-300';
+    }
+    
+    // Criar HTML do resumo (sem onclick inline)
+    const summaryHTML = `
+        <div class="w-full max-w-2xl mx-auto p-6">
+            <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-8 text-center">
+                <div class="text-6xl mb-4">${emoji}</div>
+                <h2 class="text-2xl font-bold text-white mb-2">Revisão Concluída!</h2>
+                <p class="text-slate-300 mb-8">${message}</p>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-slate-900 rounded-lg p-4">
+                        <div class="text-3xl font-bold text-indigo-400">${totalCards}</div>
+                        <div class="text-sm text-slate-400 mt-1">Cards Revisados</div>
+                    </div>
+                    
+                    <div class="bg-slate-900 rounded-lg p-4">
+                        <div class="text-3xl font-bold text-green-400">${correctCards}</div>
+                        <div class="text-sm text-slate-400 mt-1">Acertos</div>
+                    </div>
+                    
+                    <div class="bg-slate-900 rounded-lg p-4">
+                        <div class="text-3xl font-bold text-red-400">${incorrectCards}</div>
+                        <div class="text-sm text-slate-400 mt-1">Erros</div>
+                    </div>
+                    
+                    <div class="bg-slate-900 rounded-lg p-4">
+                        <div class="text-3xl font-bold ${colorClass}">${accuracy}%</div>
+                        <div class="text-sm text-slate-400 mt-1">Precisão</div>
+                    </div>
+                </div>
+                
+                <div class="mb-8">
+                    <div class="text-lg font-semibold text-slate-300 mb-2">Progresso da Sessão</div>
+                    <div class="w-full bg-slate-700 rounded-full h-4">
+                        <div class="bg-gradient-to-r from-indigo-500 to-purple-500 h-4 rounded-full transition-all duration-500" 
+                             style="width: ${accuracy}%"></div>
+                    </div>
+                    <div class="flex justify-between text-sm text-slate-400 mt-2">
+                        <span>0%</span>
+                        <span>${accuracy}%</span>
+                        <span>100%</span>
+                    </div>
+                </div>
+                
+                <div class="text-sm text-slate-400 mb-8">
+                    <p class="mb-1">⏰ Próxima revisão programada para amanhã</p>
+                    <p>📊 ${isForcedSession ? 'Sessão forçada concluída' : 'Revisão diária completa'}</p>
+                </div>
+                
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button id="btn-return-home" 
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 shadow-md">
+                        Voltar ao Menu Principal
+                    </button>
+                    <button id="btn-new-session" 
+                            class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 shadow-md border border-slate-600">
+                        Nova Sessão de Revisão
+                    </button>
+                </div>
+            </div>
+            
+            <div class="text-center mt-8">
+                <button id="btn-back-summary" 
+                        class="text-slate-400 hover:text-white font-medium transition duration-200 inline-flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Voltar para Home
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Atualizar a view
+    reviewView.innerHTML = summaryHTML;
+    
+    // Adicionar event listeners após o HTML ser inserido
+    setTimeout(() => {
+        // Botão "Voltar ao Menu Principal"
+        const btnReturnHome = document.getElementById('btn-return-home');
+        if (btnReturnHome) {
+            btnReturnHome.addEventListener('click', returnToHome);
+        }
+        
+        // Botão "Nova Sessão de Revisão"
+        const btnNewSession = document.getElementById('btn-new-session');
+        if (btnNewSession) {
+            btnNewSession.addEventListener('click', startNewReviewSession);
+        }
+        
+        // Botão "Voltar para Home" (no rodapé)
+        const btnBackSummary = document.getElementById('btn-back-summary');
+        if (btnBackSummary) {
+            btnBackSummary.addEventListener('click', () => {
+                returnToHome();
+            });
+        }
+    }, 100);
+    
+    // Limpar estatísticas da sessão
+    sessionStorage.removeItem('reviewStats');
+}
+
+function returnToHome() {
+    console.log("Voltando para home...");
+    
+    // Limpar estado da sessão forçada
+    isForcedSession = false;
+    
+    // Resetar botão de nova rodada se existir
+    const novaRodadaBtn = document.getElementById('btn-nova-rodada');
+    if (novaRodadaBtn) {
+        novaRodadaBtn.innerHTML = `
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            Nova Rodada
+        `;
+        novaRodadaBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+        novaRodadaBtn.classList.add('bg-amber-500', 'hover:bg-amber-600');
+        novaRodadaBtn.disabled = false;
+    }
+    
+    // Limpar estatísticas
+    sessionStorage.removeItem('reviewStats');
+    
+    // Voltar para home
+    showView('view-home');
+}
+
+function startNewReviewSession() {
+    console.log("Iniciando nova sessão de revisão...");
+    
+    // Resetar estado
+    isForcedSession = false;
+    currentSessionIndex = 0;
+    sessionReviewCount = 0;
+    
+    // Limpar estatísticas
+    sessionStorage.removeItem('reviewStats');
+    
+    // Resetar botão de nova rodada
+    const novaRodadaBtn = document.getElementById('btn-nova-rodada');
+    if (novaRodadaBtn) {
+        novaRodadaBtn.innerHTML = `
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            Nova Rodada
+        `;
+        novaRodadaBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+        novaRodadaBtn.classList.add('bg-amber-500', 'hover:bg-amber-600');
+        novaRodadaBtn.disabled = false;
+    }
+    
+    // Recarregar a view de revisão
+    showView('view-revisao');
+    
+    // Pequeno delay para garantir que o DOM foi atualizado
+    setTimeout(() => {
+        setupReviewSession();
+        loadNextCard();
+    }, 100);
+}
+
 function loadNextCard() {
     if (isReviewLoop) {
         console.log("Loop de revisão ativo, ignorando...");
@@ -236,20 +444,70 @@ function loadNextCard() {
     
     isReviewLoop = true;
     
-    // Resetar estado COMPLETO dos botões
+    console.log("=== CARREGANDO PRÓXIMO CARD ===");
+    console.log("Índice atual:", currentSessionIndex);
+    console.log("Total na sessão:", currentReviewSession.length);
+    
+    // Verificar se terminou a sessão
+    if (currentSessionIndex >= currentReviewSession.length) {
+        console.log("Fim da sessão de revisão");
+        
+        if (sessionReviewCount > 0) {
+            // Mostrar resumo após um pequeno delay
+            setTimeout(() => {
+                showReviewSummary();
+            }, 500);
+        } else {
+            // Nenhum card revisado - mostrar mensagem vazia
+            const cardFront = document.getElementById('card-palavra-front');
+            const revisaoMessage = document.getElementById('revisao-message');
+            const quizOptions = document.getElementById('quiz-options-container');
+            const resultControls = document.getElementById('review-result-controls');
+            
+            if (cardFront) {
+                cardFront.textContent = isForcedSession ? 
+                    "🎉 Todos os cards revisados!" : 
+                    "✨ Nenhum card para revisar hoje!";
+            }
+            if (revisaoMessage) {
+                revisaoMessage.textContent = isForcedSession ? 
+                    "Sessão forçada concluída com sucesso!" : 
+                    "Volte amanhã para novas revisões programadas.";
+            }
+            if (quizOptions) quizOptions.classList.add('hidden');
+            if (resultControls) resultControls.classList.add('hidden');
+        }
+        
+        isReviewLoop = false;
+        return;
+    }
+    
+    // OBTER O NOVO CARD
+    currentCard = currentReviewSession[currentSessionIndex];
+    console.log("Novo card obtido:", {
+        id: currentCard.id,
+        palavra: currentCard.palavraOriginal,
+        traducao: currentCard.traducao
+    });
+    
+    // Atualizar índices
+    currentSessionIndex++;
+    sessionReviewCount++;
+    
+    // Resetar estado
+    isFlipped = false;
+    document.body.classList.remove('correct-bg', 'incorrect-bg');
+    
+    // Limpar estado visual dos botões
     document.querySelectorAll('.quiz-option-btn').forEach(btn => {
         btn.disabled = false;
         btn.classList.remove('selected-correct', 'selected-incorrect', 'pulse-animation');
         btn.style.animation = '';
         btn.style.transform = '';
-        delete btn.dataset.correct; // Remover atributo data-correct
-        delete btn.dataset.value;   // Remover atributo data-value
+        btn.style.boxShadow = '';
     });
     
-    // Resetar estado do card
-    isFlipped = false;
-    document.body.classList.remove('correct-bg', 'incorrect-bg');
-    
+    // Resetar flashcard
     const flashcardContainer = document.getElementById('flashcard-container');
     if (flashcardContainer) {
         flashcardContainer.classList.remove('is-flipped');
@@ -258,47 +516,337 @@ function loadNextCard() {
     
     // Esconder controles de resultado
     const resultControls = document.getElementById('review-result-controls');
-    const quizTyping = document.getElementById('quiz-typing-container');
     if (resultControls) resultControls.classList.add('hidden');
-    if (quizTyping) quizTyping.classList.add('hidden');
     
-    // Verificar se há cards para revisar
-    if (currentSessionIndex >= currentReviewSession.length) {
-        console.log("Fim da sessão, tentando recarregar...");
-        if (!setupReviewSession()) {
-            console.log("Nenhum card para revisar");
-            const cardFront = document.getElementById('card-palavra-front');
-            const revisaoMessage = document.getElementById('revisao-message');
-            
-            if (cardFront) {
-                cardFront.textContent = isForcedSession ? 
-                    "Todos os cards revisados!" : 
-                    "Nenhum card para revisar hoje!";
-            }
-            if (revisaoMessage) {
-                revisaoMessage.textContent = isForcedSession ? 
-                    "Sessão forçada concluída!" : 
-                    "Volte amanhã para novas revisões.";
-            }
-            
-            hideQuizControls();
-            isReviewLoop = false;
-            return;
+    // Atualizar direção
+    currentDirection = currentCard.askReverse ? 'reverse' : 'forward';
+    console.log("Direção do card:", currentDirection);
+    
+    // Atualizar interface do card
+    updateCardInterface();
+    
+    // Configurar modo de teste
+    const shouldUseTyping = currentCard.consecutiveCorrect >= 2 && currentCard.lastAnswerCorrect;
+    const quizOptions = document.getElementById('quiz-options-container');
+    const quizTyping = document.getElementById('quiz-typing-container');
+    const typingInput = document.getElementById('typing-input');
+    
+    if (shouldUseTyping && quizTyping && typingInput) {
+        quizTyping.classList.remove('hidden');
+        if (quizOptions) quizOptions.classList.add('hidden');
+        typingInput.value = '';
+        setTimeout(() => typingInput.focus(), 100);
+    } else {
+        if (quizTyping) quizTyping.classList.add('hidden');
+        if (quizOptions) {
+            quizOptions.classList.remove('hidden');
+            // Configurar múltipla escolha
+            setTimeout(() => {
+                setupMultipleChoice();
+            }, 50);
         }
     }
     
-    // Carregar próximo card
-    currentCard = currentReviewSession[currentSessionIndex];
-    console.log("Carregando card:", currentCard.palavraOriginal);
-    currentSessionIndex++;
-    sessionReviewCount++;
+    updateReviewCounter();
     
-    currentDirection = currentCard.askReverse ? 'reverse' : 'forward';
+    console.log("=== CARD CARREGADO COM SUCESSO ===");
     
-    // Atualizar interface do card
+    // Resetar loop protection
+    setTimeout(() => {
+        isReviewLoop = false;
+    }, 300);
+}
+
+function setupTestMode() {
+    // Esta função agora é redundante - o código foi movido para loadNextCard
+    // Mantenha apenas por compatibilidade
+    console.log("setupTestMode chamada - usando lógica inline");
+}
+
+function initSessionStats() {
+    const stats = {
+        total: 0,
+        correct: 0,
+        startTime: new Date().toISOString(),
+        cards: []
+    };
+    sessionStorage.setItem('reviewStats', JSON.stringify(stats));
+    console.log("Estatísticas da sessão inicializadas");
+}
+
+function updateSessionStats(isCorrect) {
+    try {
+        const statsStr = sessionStorage.getItem('reviewStats');
+        let stats = statsStr ? JSON.parse(statsStr) : { total: 0, correct: 0, cards: [] };
+        
+        stats.total = (stats.total || 0) + 1;
+        if (isCorrect) {
+            stats.correct = (stats.correct || 0) + 1;
+        }
+        
+        // Registrar este card
+        if (currentCard) {
+            stats.cards = stats.cards || [];
+            stats.cards.push({
+                id: currentCard.id,
+                palavra: currentCard.palavraOriginal,
+                traducao: currentCard.traducao,
+                correct: isCorrect,
+                timestamp: new Date().toISOString(),
+                direction: currentDirection
+            });
+            
+            // Manter apenas os últimos 50 cards para não ficar muito grande
+            if (stats.cards.length > 50) {
+                stats.cards = stats.cards.slice(-50);
+            }
+        }
+        
+        sessionStorage.setItem('reviewStats', JSON.stringify(stats));
+        console.log("Estatísticas atualizadas - Total:", stats.total, "Corretas:", stats.correct);
+    } catch (error) {
+        console.error("Erro ao atualizar estatísticas:", error);
+    }
+}
+
+function showNoCardsMessage() {
+    const reviewView = document.getElementById('view-revisao');
+    if (!reviewView) return;
+    
+    reviewView.innerHTML = `
+        <div class="w-full max-w-2xl mx-auto p-6">
+            <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-8 text-center">
+                <div class="text-6xl mb-4">📚</div>
+                <h2 class="text-2xl font-bold text-white mb-4" id="no-cards-title">
+                    ${isForcedSession ? 'Todos os Cards Revisados!' : 'Nenhum Card para Revisar Hoje!'}
+                </h2>
+                
+                <p class="text-slate-300 mb-6" id="no-cards-message">
+                    ${isForcedSession ? 
+                        'Você revisou todos os cards disponíveis na sessão forçada.' : 
+                        'Todos os seus cards estão em dia! Volte amanhã para novas revisões.'}
+                </p>
+                
+                <div class="text-sm text-slate-400 mb-8">
+                    <p class="mb-2">📊 Total de cards no sistema: ${allFlashcards.length}</p>
+                    <p>⏰ Próxima revisão programada para amanhã</p>
+                </div>
+                
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button id="btn-home-from-empty" 
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 shadow-md">
+                        Voltar ao Menu
+                    </button>
+                    
+                    ${!isForcedSession ? `
+                    <button id="btn-force-session" 
+                            class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 shadow-md">
+                        Iniciar Sessão Forçada
+                    </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Adicionar event listeners após o HTML ser inserido
+    setTimeout(() => {
+        // Botão "Voltar ao Menu"
+        const btnHomeFromEmpty = document.getElementById('btn-home-from-empty');
+        if (btnHomeFromEmpty) {
+            btnHomeFromEmpty.addEventListener('click', () => {
+                showView('view-home');
+            });
+        }
+        
+        // Botão "Iniciar Sessão Forçada"
+        const btnForceSession = document.getElementById('btn-force-session');
+        if (btnForceSession) {
+            btnForceSession.addEventListener('click', startForcedReviewSession);
+        }
+    }, 100);
+}
+
+function setupMultipleChoice() {
+    if (!currentCard) {
+        console.error("ERRO: currentCard não definido!");
+        return;
+    }
+    
+    console.log("=== CONFIGURANDO MÚLTIPLA ESCOLHA ===");
+    console.log("Card:", currentCard.palavraOriginal);
+    console.log("Direção:", currentDirection);
+    
+    // PRIMEIRO: Limpar completamente os botões
+    const optionButtons = document.querySelectorAll('.quiz-option-btn');
+    optionButtons.forEach(btn => {
+        btn.textContent = '';
+        btn.disabled = false;
+        btn.classList.remove('selected-correct', 'selected-incorrect', 'pulse-animation');
+        btn.style.animation = '';
+        btn.style.transform = '';
+        btn.style.boxShadow = '';
+        
+        // Remover event listeners antigos clonando o botão
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+    });
+    
+    // Obter nova referência aos botões
+    const freshButtons = document.querySelectorAll('.quiz-option-btn');
+    
+    let respostaCorreta;
+    let opcoesErradas = [];
+    
+    if (currentDirection === 'forward') {
+        respostaCorreta = currentCard.traducao ? String(currentCard.traducao).trim() : '';
+        console.log("Modo FORWARD - Resposta correta:", respostaCorreta);
+        
+        // Buscar traduções de outros cards - GARANTIR QUE SÃO STRINGS
+        opcoesErradas = allFlashcards
+            .filter(card => {
+                const diferente = card.id !== currentCard.id;
+                const temTraducao = card.traducao && String(card.traducao).trim() !== '';
+                const naoEhCorreta = card.traducao && 
+                    String(card.traducao).trim().toLowerCase() !== respostaCorreta.toLowerCase();
+                return diferente && temTraducao && naoEhCorreta;
+            })
+            .map(card => String(card.traducao).trim()) // CONVERTER PARA STRING
+            .filter((valor, indice, self) => {
+                return valor && 
+                       self.indexOf(valor) === indice && 
+                       valor.toLowerCase() !== respostaCorreta.toLowerCase();
+            })
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 3);
+            
+    } else {
+        respostaCorreta = currentCard.palavraOriginal ? String(currentCard.palavraOriginal).trim() : '';
+        console.log("Modo REVERSE - Resposta correta:", respostaCorreta);
+        
+        // Buscar palavras originais de outros cards - GARANTIR QUE SÃO STRINGS
+        opcoesErradas = allFlashcards
+            .filter(card => {
+                const diferente = card.id !== currentCard.id;
+                const mesmoIdioma = card.idiomaOriginal === currentCard.idiomaOriginal;
+                const temPalavra = card.palavraOriginal && String(card.palavraOriginal).trim() !== '';
+                const naoEhCorreta = card.palavraOriginal && 
+                    String(card.palavraOriginal).trim().toLowerCase() !== respostaCorreta.toLowerCase();
+                return diferente && mesmoIdioma && temPalavra && naoEhCorreta;
+            })
+            .map(card => String(card.palavraOriginal).trim()) // CONVERTER PARA STRING
+            .filter((valor, indice, self) => {
+                return valor && 
+                       self.indexOf(valor) === indice && 
+                       valor.toLowerCase() !== respostaCorreta.toLowerCase();
+            })
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 3);
+    }
+    
+    console.log("Opções erradas encontradas:", opcoesErradas);
+    
+    // GARANTIR que todas as opções são strings válidas
+    opcoesErradas = opcoesErradas.map(opcao => 
+        String(opcao).trim()
+    ).filter(opcao => opcao && opcao !== '');
+    
+    // Preencher opções faltantes com fallback
+    while (opcoesErradas.length < 3) {
+        const opcaoFallback = getFallbackOption(currentDirection, respostaCorreta, opcoesErradas);
+        if (opcaoFallback) {
+            opcoesErradas.push(String(opcaoFallback).trim());
+        } else {
+            // Fallback genérico seguro
+            const fallbacks = ["Opção A", "Opção B", "Opção C"];
+            const opcao = fallbacks[opcoesErradas.length];
+            if (!opcoesErradas.includes(opcao) && opcao !== respostaCorreta) {
+                opcoesErradas.push(opcao);
+            }
+        }
+    }
+    
+    // Combinar todas as opções (GARANTINDO QUE SÃO STRINGS)
+    const todasOpcoes = [
+        respostaCorreta,
+        ...opcoesErradas
+    ]
+    .map(opcao => String(opcao).trim()) // CONVERTER TODOS PARA STRING
+    .filter(opcao => opcao && opcao !== "") // REMOVER VAZIOS
+    .sort(() => 0.5 - Math.random()); // EMBARALHAR
+    
+    console.log("Todas opções (embaralhadas):", todasOpcoes);
+    
+    // Atribuir opções aos botões
+    freshButtons.forEach((btn, i) => {
+        if (i < todasOpcoes.length) {
+            const opcao = todasOpcoes[i];
+            btn.textContent = opcao;
+            
+            // Armazenar informações para verificação
+            btn.dataset.correctAnswer = respostaCorreta;
+            btn.dataset.isCorrect = (opcao === respostaCorreta).toString();
+            btn.dataset.cardId = currentCard.id;
+            
+            // Adicionar event listener CORRETAMENTE
+            btn.addEventListener('click', function() {
+                console.log("Botão clicado:", this.textContent);
+                console.log("Resposta correta:", this.dataset.correctAnswer);
+                checkAnswer(this.textContent, this);
+            });
+        } else {
+            btn.textContent = '';
+            btn.disabled = true;
+        }
+    });
+    
+    console.log("=== CONFIGURAÇÃO CONCLUÍDA ===");
+}
+
+function getFallbackOption(direction, respostaCorreta, opcoesExistentes) {
+    // Converter para strings para comparação
+    const respostaStr = String(respostaCorreta).trim().toLowerCase();
+    const existentesStr = opcoesExistentes.map(op => String(op).trim().toLowerCase());
+    
+    const opcoesPortugues = [
+        "Casa", "Tempo", "Água", "Fogo", "Terra", 
+        "Ar", "Luz", "Amor", "Vida", "Dia", 
+        "Noite", "Sol", "Lua", "Mar", "Rio"
+    ];
+    
+    const opcoesIngles = [
+        "House", "Time", "Water", "Fire", "Earth", 
+        "Air", "Light", "Love", "Life", "Day", 
+        "Night", "Sun", "Moon", "Sea", "River"
+    ];
+    
+    const opcoes = direction === 'forward' ? opcoesPortugues : opcoesIngles;
+    
+    // Tentar encontrar uma opção que não existe e não é a resposta correta
+    for (const opcao of opcoes) {
+        const opcaoStr = opcao.toLowerCase();
+        const existe = existentesStr.includes(opcaoStr);
+        const ehCorreta = opcaoStr === respostaStr;
+        
+        if (!existe && !ehCorreta) {
+            return opcao;
+        }
+    }
+    
+    return null;
+}
+
+// =================== FUNÇÕES DE ATUALIZAÇÃO DO CARD ===================
+
+function updateCardInterface() {
     const cardIdiomaFront = document.getElementById('card-idioma-front');
     const cardPalavraFront = document.getElementById('card-palavra-front');
     const cardTraducaoBack = document.getElementById('card-traducao-back');
+    
+    if (!currentCard) {
+        console.error("currentCard não definido em updateCardInterface");
+        return;
+    }
     
     if (cardIdiomaFront && cardPalavraFront && cardTraducaoBack) {
         if (currentDirection === 'forward') {
@@ -310,182 +858,44 @@ function loadNextCard() {
             cardPalavraFront.textContent = currentCard.traducao || "Tradução";
             cardTraducaoBack.textContent = currentCard.palavraOriginal || "Palavra";
         }
+        
+        console.log("Interface atualizada:", {
+            idioma: cardIdiomaFront.textContent,
+            frente: cardPalavraFront.textContent,
+            verso: cardTraducaoBack.textContent
+        });
+    } else {
+        console.error("Elementos do card não encontrados");
     }
     
-    // Exemplos
+    // Atualizar exemplos
+    updateExamples();
+}
+
+function updateExamples() {
     const exemplosList = document.getElementById('card-exemplos-back');
-    if (exemplosList) {
-        exemplosList.innerHTML = '';
-        const exemplos = currentCard.exemplos || [];
-        
-        if (exemplos.length > 0) {
-            exemplos.forEach((ex, index) => {
-                const li = document.createElement('li');
-                li.textContent = `${index + 1}. ${ex}`;
-                li.className = 'text-sm text-slate-300 mb-1 pl-2';
-                exemplosList.appendChild(li);
-            });
-        } else {
+    if (!exemplosList) {
+        console.error("Elemento exemplosList não encontrado");
+        return;
+    }
+    
+    exemplosList.innerHTML = '';
+    const exemplos = currentCard?.exemplos || [];
+    
+    if (exemplos.length > 0) {
+        exemplos.forEach((ex, index) => {
             const li = document.createElement('li');
-            li.textContent = "Nenhum exemplo disponível";
-            li.className = 'text-sm text-slate-500 italic';
+            li.textContent = `${index + 1}. ${ex}`;
+            li.className = 'text-sm text-slate-300 mb-1 pl-2';
             exemplosList.appendChild(li);
-        }
-    }
-    
-    // Configurar modo de teste
-    const shouldUseTyping = currentCard.consecutiveCorrect >= 2 && currentCard.lastAnswerCorrect;
-    const quizOptions = document.getElementById('quiz-options-container');
-    const typingInput = document.getElementById('typing-input');
-    
-    if (shouldUseTyping && quizTyping && typingInput) {
-        quizTyping.classList.remove('hidden');
-        if (quizOptions) quizOptions.classList.add('hidden');
-        typingInput.value = '';
-        setTimeout(() => typingInput.focus(), 100);
+        });
+        console.log(`${exemplos.length} exemplos carregados`);
     } else {
-        if (quizOptions) {
-            quizOptions.classList.remove('hidden');
-            // IMPORTANTE: Aguardar um pouco antes de configurar as opções
-            setTimeout(() => {
-                setupMultipleChoice();
-            }, 50);
-        }
-    }
-    
-    updateReviewCounter();
-    
-    // Resetar loop protection
-    setTimeout(() => {
-        isReviewLoop = false;
-    }, 300);
-}
-
-function setupMultipleChoice() {
-    if (!currentCard) return;
-    
-    console.log("Configurando múltipla escolha para:", currentCard.palavraOriginal);
-    
-    // PRIMEIRO: Limpar completamente os botões
-    const optionButtons = document.querySelectorAll('.quiz-option-btn');
-    optionButtons.forEach(btn => {
-        btn.textContent = '';
-        btn.disabled = false;
-        btn.classList.remove('selected-correct', 'selected-incorrect', 'pulse-animation');
-        btn.style.animation = '';
-        btn.style.transform = '';
-        delete btn.dataset.correct;
-        delete btn.dataset.value;
-        btn.onclick = null; // Remover event listeners antigos
-    });
-    
-    let respostaCorreta;
-    let opcoesErradas = [];
-    
-    if (currentDirection === 'forward') {
-        respostaCorreta = currentCard.traducao || '';
-        console.log("Direção: forward, Resposta correta:", respostaCorreta);
-        
-        // Buscar traduções de outros cards
-        opcoesErradas = allFlashcards
-            .filter(card => {
-                return card.id !== currentCard.id && 
-                       card.traducao && 
-                       card.traducao.trim().toLowerCase() !== respostaCorreta.trim().toLowerCase();
-            })
-            .map(card => card.traducao)
-            .filter((value, index, self) => {
-                return value && 
-                       self.indexOf(value) === index && 
-                       value.trim().toLowerCase() !== respostaCorreta.trim().toLowerCase();
-            })
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 3);
-            
-    } else {
-        respostaCorreta = currentCard.palavraOriginal || '';
-        console.log("Direção: reverse, Resposta correta:", respostaCorreta);
-        
-        // Buscar palavras originais de outros cards
-        opcoesErradas = allFlashcards
-            .filter(card => {
-                return card.id !== currentCard.id && 
-                       card.palavraOriginal && 
-                       card.idiomaOriginal === currentCard.idiomaOriginal &&
-                       card.palavraOriginal.trim().toLowerCase() !== respostaCorreta.trim().toLowerCase();
-            })
-            .map(card => card.palavraOriginal)
-            .filter((value, index, self) => {
-                return value && 
-                       self.indexOf(value) === index && 
-                       value.trim().toLowerCase() !== respostaCorreta.trim().toLowerCase();
-            })
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 3);
-    }
-    
-    // Garantir que temos 3 opções erradas
-    while (opcoesErradas.length < 3) {
-        const fallback = getFallbackOption(currentDirection, respostaCorreta, opcoesErradas);
-        if (fallback) {
-            opcoesErradas.push(fallback);
-        } else {
-            break;
-        }
-    }
-    
-    // Combinar e embaralhar
-    const todasOpcoes = [respostaCorreta, ...opcoesErradas]
-        .filter(opcao => opcao && opcao.trim() !== "")
-        .sort(() => 0.5 - Math.random());
-    
-    console.log("Opções embaralhadas:", todasOpcoes);
-    
-    // Atribuir opções aos botões
-    optionButtons.forEach((btn, i) => {
-        if (i < todasOpcoes.length) {
-            const opcao = todasOpcoes[i];
-            btn.textContent = opcao;
-            btn.dataset.value = opcao;
-            btn.dataset.correct = (opcao === respostaCorreta).toString();
-            
-            // Adicionar evento click CORRETAMENTE
-            btn.addEventListener('click', function() {
-                checkAnswer(opcao, this);
-            });
-        }
-    });
-}
-
-function getFallbackOption(direction, respostaCorreta, opcoesExistentes) {
-    const opcoesForward = ["Casa", "Tempo", "Água", "Fogo", "Terra", "Ar", "Luz", "Amor", "Vida", "Dia"];
-    const opcoesReverse = ["House", "Time", "Water", "Fire", "Earth", "Air", "Light", "Love", "Life", "Day"];
-    
-    const opcoes = direction === 'forward' ? opcoesForward : opcoesReverse;
-    
-    for (const opcao of opcoes) {
-        if (!opcoesExistentes.includes(opcao) && opcao !== respostaCorreta) {
-            return opcao;
-        }
-    }
-    
-    return "Opção";
-}
-
-function getFallbackOptions(direction, respostaCorreta) {
-    if (direction === 'forward') {
-        // Fallback para traduções (português)
-        return [
-            "Casa", "Tempo", "Água", "Fogo", "Terra", 
-            "Luz", "Amor", "Vida", "Dia", "Noite"
-        ].filter(word => word !== respostaCorreta);
-    } else {
-        // Fallback para palavras originais (inglês/espanhol)
-        return [
-            "House", "Time", "Water", "Fire", "Earth",
-            "Light", "Love", "Life", "Day", "Night",
-            "Casa", "Tiempo", "Agua", "Fuego", "Tierra"
-        ].filter(word => word !== respostaCorreta);
+        const li = document.createElement('li');
+        li.textContent = "Nenhum exemplo disponível";
+        li.className = 'text-sm text-slate-500 italic';
+        exemplosList.appendChild(li);
+        console.log("Nenhum exemplo disponível para este card");
     }
 }
 
@@ -495,66 +905,116 @@ function checkAnswer(answer, buttonElement) {
         return;
     }
     
-    console.log("Verificando resposta:", answer);
+    console.log("=== VERIFICANDO RESPOSTA ===");
+    console.log("Card:", currentCard.palavraOriginal);
+    console.log("Resposta clicada:", answer);
+    
+    // Converter para string com segurança
+    const answerStr = String(answer).trim().toLowerCase();
     
     let correct;
     let respostaCorretaTexto;
     
-    if (currentDirection === 'forward') {
-        respostaCorretaTexto = currentCard.traducao || '';
-        correct = answer.trim().toLowerCase() === respostaCorretaTexto.trim().toLowerCase();
+    // Verificar se temos resposta no dataset do botão
+    if (buttonElement?.dataset.correctAnswer) {
+        respostaCorretaTexto = String(buttonElement.dataset.correctAnswer).trim();
+        const respostaStr = respostaCorretaTexto.toLowerCase();
+        correct = answerStr === respostaStr;
+        console.log("Usando resposta do botão:", respostaCorretaTexto, "Resultado:", correct);
     } else {
-        respostaCorretaTexto = currentCard.palavraOriginal || '';
-        correct = answer.trim().toLowerCase() === respostaCorretaTexto.trim().toLowerCase();
+        // Fallback: usar a lógica padrão
+        if (currentDirection === 'forward') {
+            respostaCorretaTexto = currentCard.traducao ? String(currentCard.traducao).trim() : '';
+            correct = answerStr === respostaCorretaTexto.toLowerCase();
+        } else {
+            respostaCorretaTexto = currentCard.palavraOriginal ? String(currentCard.palavraOriginal).trim() : '';
+            correct = answerStr === respostaCorretaTexto.toLowerCase();
+        }
+        console.log("Usando lógica padrão:", respostaCorretaTexto, "Resultado:", correct);
     }
-    
-    console.log("Resposta correta:", respostaCorretaTexto, "Acertou?", correct);
     
     // Desabilitar todos os botões
     document.querySelectorAll('.quiz-option-btn').forEach(btn => {
         btn.disabled = true;
     });
     
-    // Feedback visual IMEDIATO
+    // Feedback visual
     if (buttonElement) {
         if (correct) {
-            // Acertou - botão verde com animação
             buttonElement.classList.add('selected-correct');
-            buttonElement.classList.add('correct-feedback');
-            
-            // Efeito de confete sutil
-            createConfettiEffect(buttonElement, true);
+            console.log("✅ RESPOSTA CORRETA!");
         } else {
-            // Errou - botão vermelho
             buttonElement.classList.add('selected-incorrect');
-            buttonElement.classList.add('incorrect-feedback');
+            console.log("❌ RESPOSTA INCORRETA!");
             
-            // Encontrar e destacar a resposta correta
+            // Destacar a resposta correta
+            const respostaCorretaStr = respostaCorretaTexto.toLowerCase();
             document.querySelectorAll('.quiz-option-btn').forEach(btn => {
-                const btnText = btn.textContent.trim();
-                const isCorrectAnswer = btnText.toLowerCase() === respostaCorretaTexto.toLowerCase();
-                
-                if (isCorrectAnswer) {
+                const btnText = String(btn.textContent).trim().toLowerCase();
+                if (btnText === respostaCorretaStr) {
                     btn.classList.add('selected-correct');
-                    btn.classList.add('pulse-animation');
-                    createConfettiEffect(btn, false);
+                    console.log("Resposta correta destacada:", btn.textContent);
                 }
             });
-            
-            // Efeito de shake para erro
-            buttonElement.classList.add('shake-animation');
         }
     }
     
-    // Atualizar estatísticas da sessão
+    // Atualizar estatísticas
     updateSessionStats(correct);
     
-    // Virar o card após delay para ver o feedback
+    // Virar o card
     setTimeout(() => {
         flipCard(correct);
         updateReviewLevel(correct);
-    }, 1500);
+    }, 1000);
 }
+
+// Função auxiliar para garantir que valores são strings
+function safeString(value) {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+}
+
+// Função para limpar dados dos cards
+function sanitizeCardData(card) {
+    if (!card) return null;
+    
+    return {
+        ...card,
+        palavraOriginal: safeString(card.palavraOriginal),
+        traducao: safeString(card.traducao),
+        idiomaOriginal: safeString(card.idiomaOriginal),
+        idiomaTraducao: safeString(card.idiomaTraducao),
+        outrasOpcoes: Array.isArray(card.outrasOpcoes) ? 
+            card.outrasOpcoes.map(safeString).filter(s => s !== '') : [],
+        exemplos: Array.isArray(card.exemplos) ? 
+            card.exemplos.map(safeString).filter(s => s !== '') : []
+    };
+}
+
+function debugCurrentCard() {
+    console.log("=== DEBUG CURRENT CARD ===");
+    console.log("currentCard:", currentCard);
+    console.log("ID:", currentCard?.id);
+    console.log("Palavra:", currentCard?.palavraOriginal);
+    console.log("Tradução:", currentCard?.traducao);
+    console.log("Direção:", currentDirection);
+    console.log("All flashcards:", allFlashcards.length);
+    
+    // Verificar se o card atual existe no array
+    const found = allFlashcards.find(c => c.id === currentCard?.id);
+    console.log("Card encontrado no array:", !!found);
+    
+    // Verificar os botões atuais
+    const buttons = document.querySelectorAll('.quiz-option-btn');
+    console.log("Botões encontrados:", buttons.length);
+    buttons.forEach((btn, i) => {
+        console.log(`Botão ${i}:`, btn.textContent, "Correct?", btn.dataset.isCorrect);
+    });
+    console.log("=== DEBUG END ===");
+}
+
+// Chame esta função no console do navegador quando tiver o problema
 
 function createConfettiEffect(element, isCorrect) {
     if (!element) return;
@@ -605,14 +1065,6 @@ function createConfettiEffect(element, isCorrect) {
         
         requestAnimationFrame(animate);
     }
-}
-
-function updateSessionStats(isCorrect) {
-    // Esta função pode ser expandida para mostrar estatísticas em tempo real
-    const stats = JSON.parse(sessionStorage.getItem('reviewStats') || '{"total": 0, "correct": 0}');
-    stats.total++;
-    if (isCorrect) stats.correct++;
-    sessionStorage.setItem('reviewStats', JSON.stringify(stats));
 }
 
 function flipCard(correct) {
@@ -1126,21 +1578,25 @@ function renderEstatisticasDetalhadas() {
 // =================== ADICIONAR CARDS ===================
 async function saveFlashcard(cardData) {
     try {
-        if (!cardData.palavraOriginal || !cardData.traducao || !cardData.exemplos) {
+        // Sanitizar dados antes de salvar
+        const sanitizedData = sanitizeCardData(cardData);
+        
+        if (!sanitizedData.palavraOriginal || !sanitizedData.traducao) {
             throw new Error("Dados incompletos do card");
         }
         
-        if (!cardData.outrasOpcoes || cardData.outrasOpcoes.length === 0) {
-            cardData.outrasOpcoes = await getOutrasOpcoes(cardData.traducao);
+        // Garantir que exemplos é um array
+        if (!Array.isArray(sanitizedData.exemplos) || sanitizedData.exemplos.length === 0) {
+            throw new Error("Adicione pelo menos um exemplo");
         }
         
         const newCard = {
-            idiomaOriginal: cardData.idiomaOriginal || "Inglês",
-            palavraOriginal: cardData.palavraOriginal,
-            idiomaTraducao: cardData.idiomaTraducao || "Português",
-            traducao: cardData.traducao,
-            outrasOpcoes: cardData.outrasOpcoes || [],
-            exemplos: Array.isArray(cardData.exemplos) ? cardData.exemplos : [],
+            idiomaOriginal: sanitizedData.idiomaOriginal || "Inglês",
+            palavraOriginal: sanitizedData.palavraOriginal,
+            idiomaTraducao: sanitizedData.idiomaTraducao || "Português",
+            traducao: sanitizedData.traducao,
+            outrasOpcoes: sanitizedData.outrasOpcoes || [],
+            exemplos: sanitizedData.exemplos,
             reviewLevel: 0,
             consecutiveCorrect: 0,
             lastAnswerCorrect: true,
@@ -1220,12 +1676,20 @@ function setupRealtimeListener() {
         snapshot.forEach(doc => {
             const data = doc.data();
             data.id = doc.id;
+            
+            // SANITIZAR OS DADOS
+            const sanitizedData = sanitizeCardData(data);
+            
             if (data.nextReview && data.nextReview.toDate) {
-                data.nextReview = data.nextReview.toDate();
+                sanitizedData.nextReview = data.nextReview.toDate();
             }
-            allFlashcards.push(data);
+            
+            allFlashcards.push(sanitizedData);
         });
         
+        console.log(`${allFlashcards.length} cards carregados (sanitizados)`);
+        
+        // Atualizar views se necessário
         if (!document.getElementById('view-biblioteca').classList.contains('hidden')) {
             renderLibrary();
         }
@@ -1591,3 +2055,37 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 });
+
+// =================== VERIFICAÇÃO DE FUNÇÕES GLOBAIS ===================
+
+// Garantir que funções importantes estão no escopo global
+window.returnToHome = returnToHome;
+window.startNewReviewSession = startNewReviewSession;
+window.showReviewSummary = showReviewSummary;
+window.showNoCardsMessage = showNoCardsMessage;
+window.startForcedReviewSession = startForcedReviewSession;
+window.showView = showView;
+
+// Funções que podem ser chamadas por event listeners inline
+if (typeof window !== 'undefined') {
+    // Lista de funções que precisam estar disponíveis globalmente
+    const globalFunctions = [
+        'returnToHome',
+        'startNewReviewSession', 
+        'showReviewSummary',
+        'showNoCardsMessage',
+        'startForcedReviewSession',
+        'showView',
+        'setupReviewSession',
+        'loadNextCard',
+        'checkAnswer',
+        'flipCard',
+        'updateReviewLevel'
+    ];
+    
+    globalFunctions.forEach(funcName => {
+        if (typeof window[funcName] === 'undefined' && typeof eval(funcName) !== 'undefined') {
+            window[funcName] = eval(funcName);
+        }
+    });
+}
