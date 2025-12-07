@@ -8,6 +8,7 @@ import {
     onAuthStateChanged, 
     signOut 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+// No topo do arquivo, verifique se está importando writeBatch:
 import { 
     getFirestore, 
     doc, 
@@ -17,7 +18,8 @@ import {
     Timestamp, 
     addDoc, 
     deleteDoc,
-    writeBatch
+    writeBatch,
+    getDocs  // Adicione esta se não existir
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Configuração Firebase
@@ -1127,15 +1129,17 @@ async function updateReviewLevel(correct) {
 }
 
 function startForcedReviewSession() {
-    if (!confirm("Iniciar nova rodada de revisão?\n\nIsso revisará todos os cards disponíveis, independentemente da data de revisão.")) {
-        return;
-    }
-    
-    isForcedSession = true;
-    setupReviewSession();
-    
-    const novaRodadaBtn = document.getElementById('btn-nova-rodada');
-    if (novaRodadaBtn) {
+    Sway.confirm(
+        "Iniciar nova rodada de revisão?\n\nIsso revisará todos os cards disponíveis, independentemente da data de revisão.",
+        "Nova Rodada de Revisão"
+    ).then(confirmed => {
+        if (!confirmed) return;
+        
+        isForcedSession = true;
+        setupReviewSession();
+        
+        const novaRodadaBtn = document.getElementById('btn-nova-rodada');
+        if (novaRodadaBtn) {
         novaRodadaBtn.innerHTML = `
             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -1153,6 +1157,7 @@ function startForcedReviewSession() {
     }
     
     loadNextCard();
+    });    
 }
 
 // =================== BIBLIOTECA ===================
@@ -1225,80 +1230,171 @@ function renderLibrary() {
 
     document.querySelectorAll('.btn-delete-card').forEach(btn => {
         btn.onclick = async () => {
-            if (confirm("Excluir este flashcard permanentemente?")) {
+            Sway.confirm(
+                "Excluir este flashcard permanentemente?",
+                "Excluir Card"
+            ).then(async (confirmed) => {
+                if (!confirmed) return;
+                
                 try {
                     await deleteDoc(doc(flashcardsCollectionRef, btn.dataset.id));
-                    showMessage('biblioteca-message', 'Card excluído com sucesso!', 'success', 2000);
+                    Sway.showToast('Card excluído com sucesso!', 'success', 2000);
                 } catch (err) {
-                    showMessage('biblioteca-message', 'Erro ao excluir card', 'error', 2000);
+                    Sway.showToast('Erro ao excluir card', 'error', 2000);
                 }
-            }
+            });
         };
     });
 }
 
 // =================== LIMPAR BIBLIOTECA ===================
 async function limparBiblioteca() {
+    console.log("Iniciando limpeza da biblioteca...");
+    
     if (allFlashcards.length === 0) {
-        showMessage('biblioteca-message', 'A biblioteca já está vazia.', 'info', 3000);
+        Sway.showToast('A biblioteca já está vazia.', 'info', 3000);
         return;
     }
-    
-    if (!confirm("🚨 ATENÇÃO: Esta ação irá excluir TODOS os flashcards permanentemente.\n\nEsta ação NÃO pode ser desfeita.\n\nDeseja continuar?")) {
-        return;
-    }
-    
-    if (!confirm("⚠️ Você tem CERTEZA ABSOLUTA?\n\nTodos os seus dados de aprendizado serão perdidos.\n\nDigite 'LIMPAR' para confirmar:")) {
-        return;
-    }
-    
-    const userInput = prompt("Digite 'LIMPAR' (em maiúsculas) para confirmar a exclusão de todos os flashcards:");
-    
-    if (userInput !== 'LIMPAR') {
-        showMessage('biblioteca-message', 'Operação cancelada. Nada foi excluído.', 'warning', 3000);
-        return;
-    }
-    
-    showMessage('biblioteca-message', 'Excluindo todos os flashcards...', 'info', 0);
     
     try {
-        // Usa batch para exclusão em lote
+        // PRIMEIRA CONFIRMAÇÃO
+        const primeiraConfirmacao = await Sway.confirm(
+            "🚨 ATENÇÃO: Esta ação irá excluir TODOS os flashcards permanentemente.\n\n" +
+            "Esta ação NÃO pode ser desfeita.\n\n" +
+            "Deseja continuar?",
+            "Limpar Biblioteca"
+        );
+        
+        if (!primeiraConfirmacao) {
+            console.log("Usuário cancelou na primeira confirmação");
+            return;
+        }
+        
+        // SEGUNDA CONFIRMAÇÃO
+        const segundaConfirmacao = await Sway.confirm(
+            "⚠️ Você tem CERTEZA ABSOLUTA?\n\n" +
+            "Todos os seus dados de aprendizado serão perdidos.\n\n" +
+            "Esta é a última chance para cancelar.",
+            "Confirmação Final"
+        );
+        
+        if (!segundaConfirmacao) {
+            Sway.showToast('Operação cancelada. Nada foi excluído.', 'warning', 3000);
+            return;
+        }
+        
+        // TERCEIRA CONFIRMAÇÃO COM INPUT
+        const textoConfirmacao = await Sway.prompt(
+            "Digite 'LIMPAR' (em maiúsculas) para confirmar a exclusão de TODOS os flashcards:",
+            "",
+            "Confirmação por Texto"
+        );
+        
+        if (textoConfirmacao !== 'LIMPAR') {
+            Sway.showToast('Operação cancelada. Texto incorreto.', 'warning', 3000);
+            return;
+        }
+        
+        // MOSTRAR LOADING
+        const loadingToast = Sway.showToast('Excluindo todos os flashcards...', 'info', 0);
+        
+        // EXCLUSÃO EM LOTE
+        console.log(`Iniciando exclusão de ${allFlashcards.length} cards...`);
+        
+        // Usar batch para exclusão eficiente
         const batch = writeBatch(db);
+        let contador = 0;
+        
         allFlashcards.forEach(card => {
             if (card.id) {
                 const cardRef = doc(flashcardsCollectionRef, card.id);
                 batch.delete(cardRef);
+                contador++;
             }
         });
         
+        console.log(`Preparados ${contador} cards para exclusão`);
+        
+        // Executar o batch
         await batch.commit();
         
-        // Limpa o array local imediatamente
-        allFlashcards = [];
-        currentReviewSession = [];
-        currentSessionIndex = 0;
-        sessionReviewCount = 0;
-        currentCard = null;
-        
-        showMessage('biblioteca-message', '✅ Biblioteca limpa com sucesso! Todos os flashcards foram excluídos.', 'success', 5000);
-        
-        // Atualiza a interface imediatamente
-        renderLibrary();
-        
-        // Se estiver na tela de estatísticas, atualiza também
-        if (!document.getElementById('view-estatisticas').classList.contains('hidden')) {
-            renderEstatisticas();
+        // Fechar loading toast
+        if (loadingToast && loadingToast.close) {
+            loadingToast.close();
         }
         
-        // Se estiver na tela de revisão, recarrega
-        if (!document.getElementById('view-revisao').classList.contains('hidden')) {
-            setupReviewSession();
-            loadNextCard();
+        // Mostrar sucesso
+        Sway.showToast(`✅ Biblioteca limpa com sucesso! ${contador} flashcards excluídos.`, 'success', 5000);
+        
+        // O listener do Firestore (onSnapshot) irá automaticamente atualizar o array allFlashcards
+        // e renderizar as views vazias
+        
+        // Forçar atualização imediata da interface
+        setTimeout(() => {
+            // Atualizar array local
+            allFlashcards = [];
+            currentReviewSession = [];
+            currentSessionIndex = 0;
+            sessionReviewCount = 0;
+            currentCard = null;
+            
+            // Atualizar views
+            renderLibrary();
+            
+            if (!document.getElementById('view-estatisticas').classList.contains('hidden')) {
+                renderEstatisticas();
+            }
+            
+            if (!document.getElementById('view-revisao').classList.contains('hidden')) {
+                loadNextCard();
+            }
+            
+            console.log("Limpeza concluída e interface atualizada");
+        }, 500);
+        
+    } catch (error) {
+        console.error("❌ Erro ao limpar biblioteca:", error);
+        Sway.showToast('❌ Erro ao limpar biblioteca. Tente novamente.', 'error', 5000);
+    }
+}
+
+async function limparBibliotecaSimples() {
+    if (allFlashcards.length === 0) {
+        Sway.showToast('A biblioteca já está vazia.', 'info', 3000);
+        return;
+    }
+    
+    const confirmado = await Sway.confirm(
+        `Excluir todos os ${allFlashcards.length} flashcards?`,
+        "Limpar Biblioteca"
+    );
+    
+    if (!confirmado) return;
+    
+    try {
+        const loading = Sway.showToast('Excluindo...', 'info', 0);
+        
+        // Excluir um por um (mais lento mas mais confiável para debug)
+        for (const card of allFlashcards) {
+            if (card.id) {
+                await deleteDoc(doc(flashcardsCollectionRef, card.id));
+                console.log(`Excluído: ${card.palavraOriginal}`);
+            }
         }
         
-    } catch (err) {
-        console.error("Erro ao limpar biblioteca:", err);
-        showMessage('biblioteca-message', '❌ Erro ao limpar biblioteca. Tente novamente.', 'error', 5000);
+        if (loading && loading.close) loading.close();
+        
+        Sway.showToast(`✅ ${allFlashcards.length} cards excluídos!`, 'success', 4000);
+        
+        // Forçar recarregamento
+        setTimeout(() => {
+            allFlashcards = [];
+            renderLibrary();
+        }, 1000);
+        
+    } catch (error) {
+        console.error("Erro:", error);
+        Sway.showToast('Erro ao excluir', 'error', 3000);
     }
 }
 
@@ -1669,39 +1765,33 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function setupRealtimeListener() {
-    if (!flashcardsCollectionRef) return;
+    if (!flashcardsCollectionRef) {
+        console.error("Collection ref não definida!");
+        return;
+    }
 
+    console.log("Iniciando listener do Firestore...");
+    
     onSnapshot(flashcardsCollectionRef, (snapshot) => {
+        console.log(`Snapshot recebido: ${snapshot.size} documentos`);
+        
         allFlashcards = [];
         snapshot.forEach(doc => {
             const data = doc.data();
             data.id = doc.id;
-            
-            // SANITIZAR OS DADOS
-            const sanitizedData = sanitizeCardData(data);
-            
             if (data.nextReview && data.nextReview.toDate) {
-                sanitizedData.nextReview = data.nextReview.toDate();
+                data.nextReview = data.nextReview.toDate();
             }
-            
-            allFlashcards.push(sanitizedData);
+            allFlashcards.push(data);
         });
         
-        console.log(`${allFlashcards.length} cards carregados (sanitizados)`);
+        console.log(`Total carregado: ${allFlashcards.length} cards`);
         
-        // Atualizar views se necessário
-        if (!document.getElementById('view-biblioteca').classList.contains('hidden')) {
-            renderLibrary();
-        }
-        if (!document.getElementById('view-revisao').classList.contains('hidden')) {
-            loadNextCard();
-        }
-        if (!document.getElementById('view-estatisticas').classList.contains('hidden')) {
-            renderEstatisticas();
-        }
+        // ... resto do código ...
+        
     }, (error) => {
         console.error("Erro no listener Firebase:", error);
-        showMessage('revisao-message', 'Erro ao carregar cards', 'error');
+        Sway.showToast('Erro ao carregar cards', 'error', 3000);
     });
 }
 
@@ -1730,7 +1820,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </svg>
                         Entrar com Google
                     `;
-                    showMessage('login-message', 'Erro no login. Tente novamente.', 'error');
+                    Sway.showToast('Erro no login. Tente novamente.', 'error', 4000);
                 });
         };
     }
@@ -1739,11 +1829,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnLogout = document.getElementById('btn-logout');
     if (btnLogout) {
         btnLogout.onclick = () => {
-            if (confirm("Tem certeza que deseja sair?")) {
-                signOut(auth).catch(err => {
-                    console.error("Erro no logout:", err);
-                });
-            }
+            Sway.confirm(
+                "Tem certeza que deseja sair?",
+                "Sair da Conta"
+            ).then((confirmed) => {
+                if (confirmed) {
+                    signOut(auth).catch(err => {
+                        console.error("Erro no logout:", err);
+                        Sway.showToast('Erro ao sair. Tente novamente.', 'error', 3000);
+                    });
+                }
+            });
         };
     }
     
@@ -1753,6 +1849,10 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCopiarJson.onclick = () => {
             const jsonText = document.getElementById('json-exemplo').textContent;
             navigator.clipboard.writeText(jsonText).then(() => {
+                // MOSTRAR TOAST DO SWAY
+                Sway.showToast('JSON copiado para a área de transferência!', 'success', 2000);
+                
+                // Manter o feedback visual no botão também (opcional)
                 const btn = btnCopiarJson;
                 const originalText = btn.innerHTML;
                 btn.innerHTML = `
@@ -1761,17 +1861,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     </svg>
                     Copiado!
                 `;
-                btn.classList.add('bg-green-100', 'text-green-700');
-                btn.classList.remove('bg-indigo-100', 'text-indigo-700');
+                btn.classList.add('bg-green-600', 'text-white');
+                btn.classList.remove('bg-indigo-600', 'text-white');
                 
                 setTimeout(() => {
                     btn.innerHTML = originalText;
-                    btn.classList.remove('bg-green-100', 'text-green-700');
-                    btn.classList.add('bg-indigo-100', 'text-indigo-700');
+                    btn.classList.remove('bg-green-600', 'text-white');
+                    btn.classList.add('bg-indigo-600', 'text-white');
                 }, 2000);
             }).catch(err => {
                 console.error('Erro ao copiar:', err);
-                showMessage('automatico-message', 'Erro ao copiar. Tente novamente.', 'error');
+                // USAR SWAY PARA ERRO
+                Sway.showToast('Erro ao copiar. Tente novamente.', 'error', 3000);
             });
         };
     }
@@ -1805,6 +1906,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnBackFromAddMenu) btnBackFromAddMenu.onclick = () => showView('view-home');
     
     // Botão de limpar biblioteca
+    // No final do script.js, verifique se o event listener está assim:
     const btnLimparBiblioteca = document.getElementById('btn-limpar-biblioteca');
     if (btnLimparBiblioteca) {
         btnLimparBiblioteca.onclick = limparBiblioteca;
@@ -1847,7 +1949,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const outrasOpcoesStr = document.getElementById('manual-outras-opcoes')?.value.trim() || '';
 
             if (!idiomaOriginal || !palavraOriginal || !idiomaTraducao || !traducao) {
-                showMessage('manual-message', 'Preencha todos os campos obrigatórios.', 'error');
+                Sway.showToast('Preencha todos os campos obrigatórios.', 'error', 3000);
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalBtnText;
@@ -1857,7 +1959,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const exemplos = exemplosStr.split(';').map(s => s.trim()).filter(Boolean);
             if (exemplos.length === 0) {
-                showMessage('manual-message', 'Adicione pelo menos um exemplo (separados por ";").', 'error');
+                Sway.showToast('Adicione pelo menos um exemplo (separados por ";").', 'error', 3000);
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalBtnText;
@@ -1887,10 +1989,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (success) {
-                showMessage('manual-message', '✅ Flashcard salvo com sucesso!', 'success');
+                Sway.showToast('✅ Flashcard salvo com sucesso!', 'success', 3000);
                 formAddManual.reset();
             } else {
-                showMessage('manual-message', '❌ Erro ao salvar. Tente novamente.', 'error');
+                Sway.showToast('❌ Erro ao salvar. Tente novamente.', 'error', 3000);
             }
         });
     }
@@ -1984,7 +2086,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const jsonText = txt.value.trim();
             if (!jsonText) {
-                showMessage('automatico-message', 'Cole o JSON primeiro.', 'error');
+                Sway.showToast('Cole o JSON primeiro.', 'error', 3000);
                 return;
             }
             
@@ -2036,8 +2138,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     resultMsg += ` (${errors.length} erros)`;
                     console.warn("Erros no processamento:", errors);
                 }
-                
-                showMessage('automatico-message', resultMsg, 'success', 5000);
+
+                Sway.showToast(resultMsg, 'success', 5000);
                 txt.value = "";
                 
                 setTimeout(() => {
@@ -2046,7 +2148,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
             } catch (err) {
                 console.error("Erro no JSON:", err);
-                showMessage('automatico-message', `JSON inválido: ${err.message}`, 'error', 5000);
+                Sway.showToast(`JSON inválido: ${err.message}`, 'error', 5000);
             } finally {
                 isProcessingJSON = false;
                 btn.disabled = false;
@@ -2089,3 +2191,254 @@ if (typeof window !== 'undefined') {
         }
     });
 }
+
+// =================== SWAY MODAL SYSTEM ===================
+
+const Sway = {
+    // Modal principal
+    showModal(options) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('sway-modal');
+            const title = document.getElementById('sway-title');
+            const message = document.getElementById('sway-message');
+            const body = document.getElementById('sway-body');
+            const footer = document.getElementById('sway-footer');
+            const closeBtn = document.getElementById('sway-close');
+            const overlay = document.getElementById('sway-overlay');
+            const input = document.getElementById('sway-input');
+            
+            // Configurar título e mensagem
+            title.textContent = options.title || '';
+            message.textContent = options.message || '';
+            
+            // Configurar input se necessário
+            if (options.type === 'prompt') {
+                input.classList.remove('hidden');
+                input.value = options.defaultValue || '';
+                input.placeholder = options.placeholder || 'Digite aqui...';
+                input.focus();
+            } else {
+                input.classList.add('hidden');
+            }
+            
+            // Limpar botões anteriores
+            footer.innerHTML = '';
+            
+            // Criar botões
+            if (options.buttons && options.buttons.length > 0) {
+                options.buttons.forEach(btn => {
+                    const button = document.createElement('button');
+                    button.textContent = btn.text;
+                    button.className = `sway-btn ${btn.class || 'sway-btn-primary'}`;
+                    
+                    if (btn.isPrimary) {
+                        button.classList.add('sway-btn-primary');
+                    }
+                    
+                    button.onclick = () => {
+                        const result = options.type === 'prompt' ? input.value : btn.value || true;
+                        this.hideModal();
+                        resolve(result);
+                    };
+                    
+                    footer.appendChild(button);
+                });
+            } else {
+                // Botão padrão OK
+                const okButton = document.createElement('button');
+                okButton.textContent = 'OK';
+                okButton.className = 'sway-btn sway-btn-primary';
+                okButton.onclick = () => {
+                    const result = options.type === 'prompt' ? input.value : true;
+                    this.hideModal();
+                    resolve(result);
+                };
+                footer.appendChild(okButton);
+            }
+            
+            // Fechar com ESC
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    this.hideModal();
+                    resolve(options.type === 'prompt' ? null : false);
+                }
+            };
+            
+            // Fechar ao clicar no overlay
+            overlay.onclick = () => {
+                this.hideModal();
+                resolve(options.type === 'prompt' ? null : false);
+            };
+            
+            // Fechar com botão X
+            closeBtn.onclick = () => {
+                this.hideModal();
+                resolve(options.type === 'prompt' ? null : false);
+            };
+            
+            // Mostrar modal
+            modal.classList.remove('hidden');
+            document.addEventListener('keydown', handleEscape);
+            
+            // Guardar event listener para remover depois
+            modal._escapeHandler = handleEscape;
+        });
+    },
+    
+    hideModal() {
+        const modal = document.getElementById('sway-modal');
+        modal.classList.add('hidden');
+        
+        if (modal._escapeHandler) {
+            document.removeEventListener('keydown', modal._escapeHandler);
+            delete modal._escapeHandler;
+        }
+    },
+    
+    // Alert simplificado
+    alert(message, title = 'Atenção') {
+        return this.showModal({
+            title,
+            message,
+            buttons: [{ text: 'OK', value: true }]
+        });
+    },
+    
+    // Confirm simplificado
+    confirm(message, title = 'Confirmação') {
+        return this.showModal({
+            title,
+            message,
+            buttons: [
+                { text: 'Cancelar', class: 'sway-btn-secondary', value: false },
+                { text: 'Confirmar', class: 'sway-btn-primary', value: true }
+            ]
+        });
+    },
+    
+    // Prompt simplificado
+    prompt(message, defaultValue = '', title = 'Entrada') {
+        return this.showModal({
+            type: 'prompt',
+            title,
+            message,
+            defaultValue,
+            buttons: [
+                { text: 'Cancelar', class: 'sway-btn-secondary', value: null },
+                { text: 'OK', class: 'sway-btn-primary', value: true }
+            ]
+        });
+    },
+    
+    // Toast/Notificação
+    showToast(message, type = 'info', duration = 4000) {
+        const toast = document.getElementById('sway-toast');
+        const toastMessage = document.getElementById('sway-toast-message');
+        const toastIcon = document.getElementById('sway-toast-icon');
+        const closeBtn = document.getElementById('sway-toast-close');
+        
+        // Configurar mensagem
+        toastMessage.textContent = message;
+        
+        // Configurar ícone baseado no tipo
+        let iconSvg, iconClass;
+        switch(type) {
+            case 'success':
+                iconSvg = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+                iconClass = 'sway-icon-success';
+                break;
+            case 'error':
+                iconSvg = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                iconClass = 'sway-icon-error';
+                break;
+            case 'warning':
+                iconSvg = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.998-.833-2.732 0L4.346 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>';
+                iconClass = 'sway-icon-warning';
+                break;
+            default:
+                iconSvg = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                iconClass = 'sway-icon-info';
+        }
+        
+        toastIcon.innerHTML = iconSvg;
+        toastIcon.className = iconClass;
+        
+        // Fechar toast
+        const closeToast = () => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 300);
+        };
+        
+        closeBtn.onclick = closeToast;
+        
+        // Mostrar toast
+        toast.classList.remove('hidden');
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 10);
+        
+        // Auto-fechar
+        if (duration > 0) {
+            setTimeout(closeToast, duration);
+        }
+        
+        return {
+            close: closeToast
+        };
+    }
+};
+
+// Tornar Sway global
+window.Sway = Sway;
+
+// Função para substituir showMessage por Sway.showToast
+function swayMessage(elementId, message, type = 'info', duration = 3000) {
+    // Se o elemento existir, ainda podemos atualizá-lo
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = message;
+        element.classList.remove('hidden');
+    }
+    
+    // Mostrar toast também
+    Sway.showToast(message, type, duration);
+}
+
+async function debugFirestoreState() {
+    try {
+        console.log("=== DEBUG FIRESTORE ===");
+        console.log("Usuário logado:", currentUser?.uid);
+        console.log("Collection ref:", flashcardsCollectionRef?.path);
+        console.log("Total local (allFlashcards):", allFlashcards.length);
+        
+        // Verificar diretamente no Firestore
+        if (flashcardsCollectionRef) {
+            const snapshot = await getDocs(flashcardsCollectionRef);
+            console.log("Total no Firestore:", snapshot.size);
+            
+            snapshot.forEach(doc => {
+                console.log(`Card ${doc.id}:`, doc.data().palavraOriginal);
+            });
+        }
+        console.log("=== FIM DEBUG ===");
+    } catch (error) {
+        console.error("Erro no debug:", error);
+    }
+}
+
+// Adicione um botão de debug temporário
+const debugBtn = document.createElement('button');
+debugBtn.textContent = "Debug DB";
+debugBtn.style.position = 'fixed';
+debugBtn.style.bottom = '60px';
+debugBtn.style.left = '10px';
+debugBtn.style.zIndex = '9999';
+debugBtn.style.padding = '5px 10px';
+debugBtn.style.background = '#333';
+debugBtn.style.color = 'white';
+debugBtn.style.border = 'none';
+debugBtn.style.borderRadius = '5px';
+debugBtn.onclick = debugFirestoreState;
+document.body.appendChild(debugBtn);

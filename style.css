@@ -582,3 +582,90 @@ tr:hover {
     transform: translateY(-2px);
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
 }
+
+/* =================== SWAY MODAL =================== */
+#sway-modal {
+    font-family: 'Inter', sans-serif;
+}
+
+#sway-modal .sm\\:align-middle {
+    animation: swayFadeIn 0.3s ease-out;
+}
+
+@keyframes swayFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+#sway-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Estilos para os botões do Sway */
+.sway-btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    min-width: 100px;
+    text-align: center;
+}
+
+.sway-btn-primary {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: white;
+}
+
+.sway-btn-primary:hover {
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.sway-btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sway-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+}
+
+.sway-btn-danger {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+}
+
+.sway-btn-danger:hover {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Ícones do toast */
+.sway-icon-success {
+    color: #10b981;
+}
+
+.sway-icon-error {
+    color: #ef4444;
+}
+
+.sway-icon-warning {
+    color: #f59e0b;
+}
+
+.sway-icon-info {
+    color: #3b82f6;
+}

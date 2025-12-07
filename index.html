@@ -439,5 +439,54 @@ Duradouro" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 bor
 
     <!-- Carrega o script principal da aplicação -->
     <script type="module" src="script.js"></script>
+<!-- Adicione isto antes do fechamento do body -->
+<!-- Modal Sway (Substitui alert/confirm/prompt) -->
+<div id="sway-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <!-- Overlay -->
+        <div id="sway-overlay" class="fixed inset-0 bg-black bg-opacity-70 transition-opacity"></div>
+        
+        <!-- Conteúdo do Modal -->
+        <div class="inline-block align-bottom bg-slate-800 rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-slate-700">
+            <!-- Cabeçalho -->
+            <div id="sway-header" class="px-6 pt-6 pb-4">
+                <div class="flex items-center justify-between">
+                    <h3 id="sway-title" class="text-xl font-bold text-white"></h3>
+                    <button id="sway-close" class="text-slate-400 hover:text-white transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <p id="sway-message" class="mt-2 text-slate-300"></p>
+            </div>
+            
+            <!-- Corpo (para inputs, etc) -->
+            <div id="sway-body" class="px-6 py-4">
+                <input id="sway-input" type="text" class="hidden w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-indigo-500" placeholder="Digite aqui...">
+            </div>
+            
+            <!-- Rodapé com botões -->
+            <div id="sway-footer" class="px-6 py-4 bg-slate-900/50 flex flex-col sm:flex-row gap-3 justify-end">
+                <!-- Botões serão inseridos dinamicamente aqui -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast/Notificação -->
+<div id="sway-toast" class="hidden fixed bottom-4 right-4 z-50 bg-slate-800 border border-slate-700 text-white px-6 py-4 rounded-xl shadow-2xl max-w-sm transform transition-all duration-300 translate-y-10 opacity-0">
+    <div class="flex items-start">
+        <div id="sway-toast-icon" class="mr-3 mt-1"></div>
+        <div class="flex-1">
+            <p id="sway-toast-message" class="text-sm"></p>
+        </div>
+        <button id="sway-toast-close" class="ml-4 text-slate-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+</div>
 </body>
 </html>
