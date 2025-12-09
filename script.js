@@ -143,58 +143,6 @@ let currentCard = null;
 let isFlipped = false;
 let currentDirection = 'forward';
 
-function setupReviewSession() {
-    console.log("=== INICIANDO SESSÃO DE REVISÃO ===");
-    
-    // Inicializar estatísticas da sessão
-    initSessionStats();
-    
-    const now = new Date();
-    
-    if (isForcedSession) {
-        currentReviewSession = allFlashcards
-            .filter(card => card.reviewLevel < 9)
-            .sort(() => 0.5 - Math.random());
-        console.log("Sessão forçada:", currentReviewSession.length, "cards");
-    } else {
-        currentReviewSession = allFlashcards
-            .filter(c => {
-                if (!c.nextReview) return false;
-                const reviewDate = c.nextReview instanceof Date ? c.nextReview : c.nextReview.toDate();
-                return reviewDate <= now;
-            })
-            .sort((a, b) => {
-                const dateA = a.nextReview instanceof Date ? a.nextReview : a.nextReview.toDate();
-                const dateB = b.nextReview instanceof Date ? b.nextReview : b.nextReview.toDate();
-                return dateA - dateB;
-            });
-        console.log("Sessão normal:", currentReviewSession.length, "cards vencidos");
-    }
-    
-    currentSessionIndex = 0;
-    sessionReviewCount = 0;
-    
-    updateReviewCounter();
-    
-    if (currentReviewSession.length === 0) {
-        console.log("Nenhum card para revisar");
-        return false;
-    }
-    
-    console.log("Sessão configurada com sucesso");
-    return true;
-}
-
-function hideQuizControls() {
-    const quizOptions = document.getElementById('quiz-options-container');
-    const quizTyping = document.getElementById('quiz-typing-container');
-    const resultControls = document.getElementById('review-result-controls');
-    
-    if (quizOptions) quizOptions.classList.add('hidden');
-    if (quizTyping) quizTyping.classList.add('hidden');
-    if (resultControls) resultControls.classList.add('hidden');
-}
-
 function updateReviewCounter() {
     const cardsRemainingElement = document.getElementById('cards-remaining');
     const cardsDueTodayElement = document.getElementById('cards-due-today');
@@ -570,16 +518,41 @@ function initSessionStats() {
         total: 0,
         correct: 0,
         startTime: new Date().toISOString(),
-        cards: []
+        cards: [],
+        // gravar o total inicial da sessão para a contagem regressiva
+        initialDue: Array.isArray(currentReviewSession) && currentReviewSession.length > 0
+            ? currentReviewSession.length
+            : null
     };
+    // Se não tivemos currentReviewSession disponível, calcule fallback (cards vencidos hoje)
+    if (stats.initialDue === null) {
+        try {
+            const now = new Date();
+            const totalDue = allFlashcards.filter(c => {
+                if (!c.nextReview) return false;
+                const reviewDate = c.nextReview instanceof Date ? c.nextReview : (c.nextReview.toDate ? c.nextReview.toDate() : new Date(c.nextReview));
+                return reviewDate <= now;
+            }).length;
+            stats.initialDue = totalDue;
+        } catch (e) {
+            stats.initialDue = 0;
+        }
+    }
+
     sessionStorage.setItem('reviewStats', JSON.stringify(stats));
-    console.log("Estatísticas da sessão inicializadas");
+    console.log("Estatísticas da sessão inicializadas - initialDue:", stats.initialDue);
+
+    // Atualizar #review-counter para iniciar com initialDue
+    const reviewCounterEl = document.querySelector('#review-counter');
+    if (reviewCounterEl) {
+        reviewCounterEl.textContent = String(Math.max(0, stats.initialDue || 0));
+    }
 }
 
 function updateSessionStats(isCorrect) {
     try {
         const statsStr = sessionStorage.getItem('reviewStats');
-        let stats = statsStr ? JSON.parse(statsStr) : { total: 0, correct: 0, cards: [] };
+        let stats = statsStr ? JSON.parse(statsStr) : { total: 0, correct: 0, cards: [], initialDue: null };
         
         stats.total = (stats.total || 0) + 1;
         if (isCorrect) {
@@ -603,9 +576,31 @@ function updateSessionStats(isCorrect) {
                 stats.cards = stats.cards.slice(-50);
             }
         }
+
+        // Garantir que exista initialDue (fallback para calcular se necessário)
+        if (typeof stats.initialDue !== 'number' || stats.initialDue === null) {
+            try {
+                const now = new Date();
+                const totalDue = allFlashcards.filter(c => {
+                    if (!c.nextReview) return false;
+                    const reviewDate = c.nextReview instanceof Date ? c.nextReview : (c.nextReview.toDate ? c.nextReview.toDate() : new Date(c.nextReview));
+                    return reviewDate <= now;
+                }).length;
+                stats.initialDue = totalDue;
+            } catch (e) {
+                stats.initialDue = 0;
+            }
+        }
         
         sessionStorage.setItem('reviewStats', JSON.stringify(stats));
-        console.log("Estatísticas atualizadas - Total:", stats.total, "Corretas:", stats.correct);
+        console.log("Estatísticas atualizadas - Total:", stats.total, "Corretas:", stats.correct, "InitialDue:", stats.initialDue);
+
+        // Atualizar elemento #review-counter em tempo real (contagem regressiva)
+        const reviewCounterEl = document.querySelector('#review-counter');
+        if (reviewCounterEl) {
+            const remaining = Math.max(0, (stats.initialDue || 0) - (stats.correct || 0));
+            reviewCounterEl.textContent = String(remaining);
+        }
     } catch (error) {
         console.error("Erro ao atualizar estatísticas:", error);
     }
@@ -669,140 +664,46 @@ function showNoCardsMessage() {
     }, 100);
 }
 
-function setupMultipleChoice() {
-    if (!currentCard) {
-        console.error("ERRO: currentCard não definido!");
-        return;
-    }
-    
-    console.log("=== CONFIGURANDO MÚLTIPLA ESCOLHA ===");
-    console.log("Card:", currentCard.palavraOriginal);
-    console.log("Direção:", currentDirection);
-    
-    // PRIMEIRO: Limpar completamente os botões
-    const optionButtons = document.querySelectorAll('.quiz-option-btn');
-    optionButtons.forEach(btn => {
-        btn.textContent = '';
-        btn.disabled = false;
-        btn.classList.remove('selected-correct', 'selected-incorrect', 'pulse-animation');
-        btn.style.animation = '';
-        btn.style.transform = '';
-        btn.style.boxShadow = '';
-        
-        // Remover event listeners antigos clonando o botão
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-    });
-    
-    // Obter nova referência aos botões
-    const freshButtons = document.querySelectorAll('.quiz-option-btn');
-    
-    let respostaCorreta;
-    let opcoesErradas = [];
-    
-    if (currentDirection === 'forward') {
-        respostaCorreta = currentCard.traducao ? String(currentCard.traducao).trim() : '';
-        console.log("Modo FORWARD - Resposta correta:", respostaCorreta);
-        
-        // Buscar traduções de outros cards - GARANTIR QUE SÃO STRINGS
-        opcoesErradas = allFlashcards
-            .filter(card => {
-                const diferente = card.id !== currentCard.id;
-                const temTraducao = card.traducao && String(card.traducao).trim() !== '';
-                const naoEhCorreta = card.traducao && 
-                    String(card.traducao).trim().toLowerCase() !== respostaCorreta.toLowerCase();
-                return diferente && temTraducao && naoEhCorreta;
-            })
-            .map(card => String(card.traducao).trim()) // CONVERTER PARA STRING
-            .filter((valor, indice, self) => {
-                return valor && 
-                       self.indexOf(valor) === indice && 
-                       valor.toLowerCase() !== respostaCorreta.toLowerCase();
-            })
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 3);
-            
+function setupReviewSession() {
+    console.log("=== INICIANDO SESSÃO DE REVISÃO ===");
+
+    const now = new Date();
+
+    if (isForcedSession) {
+        currentReviewSession = allFlashcards
+            .filter(card => card.reviewLevel < 9)
+            .sort(() => 0.5 - Math.random());
+        console.log("Sessão forçada:", currentReviewSession.length, "cards");
     } else {
-        respostaCorreta = currentCard.palavraOriginal ? String(currentCard.palavraOriginal).trim() : '';
-        console.log("Modo REVERSE - Resposta correta:", respostaCorreta);
-        
-        // Buscar palavras originais de outros cards - GARANTIR QUE SÃO STRINGS
-        opcoesErradas = allFlashcards
-            .filter(card => {
-                const diferente = card.id !== currentCard.id;
-                const mesmoIdioma = card.idiomaOriginal === currentCard.idiomaOriginal;
-                const temPalavra = card.palavraOriginal && String(card.palavraOriginal).trim() !== '';
-                const naoEhCorreta = card.palavraOriginal && 
-                    String(card.palavraOriginal).trim().toLowerCase() !== respostaCorreta.toLowerCase();
-                return diferente && mesmoIdioma && temPalavra && naoEhCorreta;
+        currentReviewSession = allFlashcards
+            .filter(c => {
+                if (!c.nextReview) return false;
+                const reviewDate = c.nextReview instanceof Date ? c.nextReview : c.nextReview.toDate();
+                return reviewDate <= now;
             })
-            .map(card => String(card.palavraOriginal).trim()) // CONVERTER PARA STRING
-            .filter((valor, indice, self) => {
-                return valor && 
-                       self.indexOf(valor) === indice && 
-                       valor.toLowerCase() !== respostaCorreta.toLowerCase();
-            })
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 3);
-    }
-    
-    console.log("Opções erradas encontradas:", opcoesErradas);
-    
-    // GARANTIR que todas as opções são strings válidas
-    opcoesErradas = opcoesErradas.map(opcao => 
-        String(opcao).trim()
-    ).filter(opcao => opcao && opcao !== '');
-    
-    // Preencher opções faltantes com fallback
-    while (opcoesErradas.length < 3) {
-        const opcaoFallback = getFallbackOption(currentDirection, respostaCorreta, opcoesErradas);
-        if (opcaoFallback) {
-            opcoesErradas.push(String(opcaoFallback).trim());
-        } else {
-            // Fallback genérico seguro
-            const fallbacks = ["Opção A", "Opção B", "Opção C"];
-            const opcao = fallbacks[opcoesErradas.length];
-            if (!opcoesErradas.includes(opcao) && opcao !== respostaCorreta) {
-                opcoesErradas.push(opcao);
-            }
-        }
-    }
-    
-    // Combinar todas as opções (GARANTINDO QUE SÃO STRINGS)
-    const todasOpcoes = [
-        respostaCorreta,
-        ...opcoesErradas
-    ]
-    .map(opcao => String(opcao).trim()) // CONVERTER TODOS PARA STRING
-    .filter(opcao => opcao && opcao !== "") // REMOVER VAZIOS
-    .sort(() => 0.5 - Math.random()); // EMBARALHAR
-    
-    console.log("Todas opções (embaralhadas):", todasOpcoes);
-    
-    // Atribuir opções aos botões
-    freshButtons.forEach((btn, i) => {
-        if (i < todasOpcoes.length) {
-            const opcao = todasOpcoes[i];
-            btn.textContent = opcao;
-            
-            // Armazenar informações para verificação
-            btn.dataset.correctAnswer = respostaCorreta;
-            btn.dataset.isCorrect = (opcao === respostaCorreta).toString();
-            btn.dataset.cardId = currentCard.id;
-            
-            // Adicionar event listener CORRETAMENTE
-            btn.addEventListener('click', function() {
-                console.log("Botão clicado:", this.textContent);
-                console.log("Resposta correta:", this.dataset.correctAnswer);
-                checkAnswer(this.textContent, this);
+            .sort((a, b) => {
+                const dateA = a.nextReview instanceof Date ? a.nextReview : a.nextReview.toDate();
+                const dateB = b.nextReview instanceof Date ? b.nextReview : b.nextReview.toDate();
+                return dateA - dateB;
             });
-        } else {
-            btn.textContent = '';
-            btn.disabled = true;
-        }
-    });
-    
-    console.log("=== CONFIGURAÇÃO CONCLUÍDA ===");
+        console.log("Sessão normal:", currentReviewSession.length, "cards vencidos");
+    }
+
+    currentSessionIndex = 0;
+    sessionReviewCount = 0;
+
+    // Inicializar estatísticas DA SESSÃO agora que currentReviewSession foi definido
+    initSessionStats();
+
+    updateReviewCounter();
+
+    if (currentReviewSession.length === 0) {
+        console.log("Nenhum card para revisar");
+        return false;
+    }
+
+    console.log("Sessão configurada com sucesso");
+    return true;
 }
 
 function getFallbackOption(direction, respostaCorreta, opcoesExistentes) {
@@ -964,11 +865,77 @@ function checkAnswer(answer, buttonElement) {
     // Atualizar estatísticas
     updateSessionStats(correct);
     
-    // Virar o card
-    setTimeout(() => {
-        flipCard(correct);
-        updateReviewLevel(correct);
-    }, 1000);
+    // SE ACERTOU: carregar próximo card automaticamente
+    if (correct) {
+        console.log("Carregando próximo card em 800ms...");
+        setTimeout(() => {
+            updateReviewLevel(correct);
+            loadNextCard();
+        }, 800);
+    } else {
+        // SE ERROU: virar o card para mostrar a resposta correta
+        console.log("Mostrando resposta correta...");
+        setTimeout(() => {
+            flipCard(correct);
+            updateReviewLevel(correct);
+        }, 1000);
+    }
+}
+
+function setupMultipleChoice() {
+    const buttons = Array.from(document.querySelectorAll('.quiz-option-btn'));
+    if (!buttons.length || !currentCard) return;
+
+    const correctAnswer = (currentDirection === 'forward' ? (currentCard.traducao || '') : (currentCard.palavraOriginal || '')).trim();
+    // Começar com as opções erradas definidas no próprio card (se houver)
+    let wrongs = Array.isArray(currentCard.outrasOpcoes) ? currentCard.outrasOpcoes.map(safeString).filter(s => s) : [];
+
+    // Pool de opções vindas de outros cards
+    const pool = allFlashcards
+        .filter(c => c.id !== currentCard.id)
+        .map(c => (currentDirection === 'forward' ? c.traducao : c.palavraOriginal))
+        .map(safeString)
+        .filter(s => s && s.toLowerCase() !== correctAnswer.toLowerCase());
+
+    const shuffle = (arr) => arr.sort(() => Math.random() - 0.5);
+
+    // Construir lista de opções garantindo unicidade
+    const options = [correctAnswer];
+    // adicionar do `outrasOpcoes` do card
+    for (const w of wrongs) {
+        if (options.length >= buttons.length) break;
+        if (!options.some(o => o.toLowerCase() === w.toLowerCase())) options.push(w);
+    }
+    // completar a partir do pool
+    shuffle(pool);
+    for (const p of pool) {
+        if (options.length >= buttons.length) break;
+        if (!options.some(o => o.toLowerCase() === p.toLowerCase())) options.push(p);
+    }
+
+    // fallback usando getFallbackOption se ainda faltar
+    while (options.length < buttons.length) {
+        const fb = getFallbackOption(currentDirection, correctAnswer, options);
+        if (!fb) break;
+        options.push(fb);
+    }
+
+    // embaralhar e aplicar nas buttons
+    shuffle(options);
+    buttons.forEach((btn, i) => {
+        const text = options[i] || '';
+        btn.textContent = text;
+        // armazena a resposta correta para que checkAnswer possa usá-la
+        btn.dataset.correctAnswer = correctAnswer;
+        btn.dataset.index = i;
+        btn.disabled = false;
+        btn.classList.remove('selected-correct', 'selected-incorrect', 'pulse-animation');
+        btn.style.animation = '';
+        btn.style.transform = '';
+        btn.style.boxShadow = '';
+        // garantir handler -> chama checkAnswer quando clicado
+        btn.onclick = () => checkAnswer(String(text).trim(), btn);
+    });
 }
 
 // Função auxiliar para garantir que valores são strings
@@ -1215,7 +1182,7 @@ function renderLibrary() {
                 <div class="${levelColor}">
                     Nível ${card.reviewLevel || 0}
                 </div>
-                <div class="text-xs text-gray-500">Acertos: ${card.consecutiveCorrect || 0} seg.</div>
+                <div class="text-xs text-gray-500 mt-1">Acertos: ${card.consecutiveCorrect || 0} seg.</div>
             </td>
             <td class="px-6 py-4 text-sm">${nextReviewDate}</td>
             <td class="px-6 py-4 text-sm ${accuracyColor}">
@@ -1586,7 +1553,7 @@ function renderTopRevisados() {
         tr.innerHTML = `
             <td colspan="7" class="px-6 py-8 text-center text-gray-500">
                 <svg class="w-10 h-10 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
                 <p>Nenhum card foi revisado ainda</p>
             </td>
@@ -1720,7 +1687,7 @@ async function getOutrasOpcoes(traducaoAtual, limite = 3) {
         }
         
         const opcoesDisponiveis = allFlashcards
-            .filter(card => card.traducao && card.traducao.trim().toLowerCase() !== traducaoAtual.trim().toLowerCase())
+            .filter(c => c.traducao && c.traducao.trim().toLowerCase() !== traducaoAtual.trim().toLowerCase())
             .map(card => card.traducao)
             .filter((value, index, self) => self.indexOf(value) === index);
         
@@ -2042,25 +2009,55 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Próximo card
     // No event listener do btn-next-card, adicione:
+    // Próximo card
     const btnNextCard = document.getElementById('btn-next-card');
     if (btnNextCard) {
         btnNextCard.onclick = () => {
-            // Forçar reset completo
+            // Forçar reset completo dos botões
             document.querySelectorAll('.quiz-option-btn').forEach(btn => {
                 btn.classList.remove('selected-correct', 'selected-incorrect', 'pulse-animation');
                 btn.style.animation = '';
                 btn.style.transform = '';
                 btn.disabled = false;
             });
-            
+
             // Esconder controles de resultado
             const resultControls = document.getElementById('review-result-controls');
             if (resultControls) resultControls.classList.add('hidden');
-            
+
             // Mostrar opções do quiz
             const quizOptions = document.getElementById('quiz-options-container');
             if (quizOptions) quizOptions.classList.remove('hidden');
-            
+
+            // Garantir que o estado de "flipped" não bloqueie ações
+            isFlipped = false;
+
+            // Remover visual de flip sem animação para não revelar o verso
+            const flashcardContainer = document.getElementById('flashcard-container');
+            if (flashcardContainer) {
+                // Desativar transições temporariamente
+                const prevTransition = flashcardContainer.style.transition;
+                flashcardContainer.style.transition = 'none';
+
+                // Remover classe que aplica o flip (remove a face de trás imediatamente)
+                flashcardContainer.classList.remove('is-flipped');
+                flashcardContainer.style.pointerEvents = 'auto';
+
+                // Esconder conteúdo do verso enquanto atualizamos (garante que nada apareça)
+                const backEls = flashcardContainer.querySelectorAll('#card-traducao-back, #card-exemplos-back, .card-back');
+                backEls.forEach(el => el.style.visibility = 'hidden');
+
+                // Forçar reflow para aplicar imediatamente as mudanças
+                void flashcardContainer.offsetHeight;
+
+                // Restaurar transições e visibilidade logo em seguida
+                setTimeout(() => {
+                    flashcardContainer.style.transition = prevTransition || '';
+                    backEls.forEach(el => el.style.visibility = '');
+                }, 50);
+            }
+
+            // Carregar próximo card e atualizar contadores
             loadNextCard();
             updateReviewCounter();
         };
@@ -2428,6 +2425,7 @@ async function debugFirestoreState() {
     }
 }
 
+/*
 // Adicione um botão de debug temporário
 const debugBtn = document.createElement('button');
 debugBtn.textContent = "Debug DB";
@@ -2442,3 +2440,4 @@ debugBtn.style.border = 'none';
 debugBtn.style.borderRadius = '5px';
 debugBtn.onclick = debugFirestoreState;
 document.body.appendChild(debugBtn);
+*/
