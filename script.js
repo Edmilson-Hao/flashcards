@@ -74,13 +74,27 @@ function showLoading(text = "Carregando...") {
 }
 
 function showView(viewId) {
+    // Esconde todas as views e mostra apenas a solicitada
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     const view = document.getElementById(viewId);
     if (view) {
         view.classList.remove('hidden');
     }
+
+    // Remover classes de background de resultado (se houver)
     document.body.classList.remove('correct-bg', 'incorrect-bg');
 
+    // Garantir que o viewport mostre o topo da nova view (resolve o scroll residual)
+    // Compatível com navegadores antigos e modernos
+    try {
+        window.scrollTo(0, 0);
+        document.body.scrollTop = 0;
+        document.documentElement.scrollTop = 0;
+    } catch (e) {
+        /* ignore */
+    }
+
+    // Quando entrar na view-revisao, configurar sessão e carregar primeiro card
     if (viewId === 'view-revisao') {
         isForcedSession = false;
         
@@ -101,7 +115,7 @@ function showView(viewId) {
         setupReviewSession();
         loadNextCard();
     }
-    
+
     if (viewId === 'view-biblioteca') renderLibrary();
     if (viewId === 'view-estatisticas') renderEstatisticas();
 }
@@ -1063,7 +1077,7 @@ function flipCard(correct) {
 }
 
 async function updateReviewLevel(correct) {
-    if (!currentCard || !flashcardsCollectionRef || !currentCard.id) return;
+    if (!currentCard || !currentCard.id) return;
     
     const newConsecutiveCorrect = correct ? 
         (currentCard.consecutiveCorrect || 0) + 1 : 
@@ -1074,24 +1088,44 @@ async function updateReviewLevel(correct) {
         Math.max(0, (currentCard.reviewLevel || 0) - 1);
     
     const nextDate = getNextReviewDate(newLevel);
+    
+    const updates = {
+        reviewLevel: newLevel,
+        consecutiveCorrect: newConsecutiveCorrect,
+        lastAnswerCorrect: correct,
+        nextReview: Timestamp.fromDate(nextDate),
+        lastReviewed: Timestamp.now(),
+        totalReviews: (currentCard.totalReviews || 0) + 1,
+        correctCount: (currentCard.correctCount || 0) + (correct ? 1 : 0)
+    };
 
     try {
-        await updateDoc(doc(flashcardsCollectionRef, currentCard.id), {
-            reviewLevel: newLevel,
-            consecutiveCorrect: newConsecutiveCorrect,
-            lastAnswerCorrect: correct,
-            nextReview: Timestamp.fromDate(nextDate),
-            lastReviewed: Timestamp.now(),
-            totalReviews: (currentCard.totalReviews || 0) + 1,
-            correctCount: (currentCard.correctCount || 0) + (correct ? 1 : 0)
-        });
+        if (!flashcardsCollectionRef) {
+            throw new Error("Não conectado ao Firestore");
+        }
+        
+        await updateDoc(doc(flashcardsCollectionRef, currentCard.id), updates);
+        
+        // Atualizar card local
+        Object.assign(currentCard, updates);
         
         setTimeout(() => {
             updateReviewCounter();
         }, 100);
     } catch (err) {
         console.error("Erro ao atualizar revisão:", err);
-        showMessage('revisao-message', 'Erro ao salvar revisão', 'error');
+        
+        // Se offline, salvar para sincronização depois
+        if (!navigator.onLine) {
+            console.log("[Offline] Salvando mudança para sincronização depois");
+            offlineSync.addChange('updateReview', {
+                cardId: currentCard.id,
+                updates: updates
+            });
+            Sway.showToast('✓ Salvo localmente. Será sincronizado quando voltar online.', 'info', 3000);
+        } else {
+            showMessage('revisao-message', 'Erro ao salvar revisão', 'error');
+        }
     }
 }
 
@@ -1712,23 +1746,39 @@ async function getOutrasOpcoes(traducaoAtual, limite = 3) {
 }
 
 // =================== AUTENTICAÇÃO ===================
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, (user) => {
     currentUser = user;
-    if (user) {
-        const userDisplay = document.getElementById('user-display');
-        const userIdDisplay = document.getElementById('user-id-display');
-        
-        if (userDisplay) userDisplay.textContent = user.displayName || "Anônimo";
-        if (userIdDisplay) userIdDisplay.textContent = user.uid.substring(0, 8) + "...";
 
-        flashcardsCollectionRef = collection(db, "users", user.uid, "flashcards");
-        
-        setupRealtimeListener();
-        showView('view-home');
+    const doAfterDom = async () => {
+        if (user) {
+            document.querySelector("#view-login > div").style.display = 'none';
+            document.querySelector("#view-login").style.display = 'none';
+            const userDisplay = document.getElementById('user-display');
+            const userIdDisplay = document.getElementById('user-id-display');
+
+            if (userDisplay) userDisplay.textContent = user.displayName || user.email || 'Usuário';
+            if (userIdDisplay) userIdDisplay.textContent = user.uid || '';
+
+            flashcardsCollectionRef = collection(db, "users", user.uid, "flashcards");
+
+            // start listener and show home AFTER DOM is ready
+            setupRealtimeListener();
+            showView('view-home');
+        } else {
+            // not logged -> show login
+            showView('view-login');
+        }
+
+        hideLoading();
+        // ensure top of page
+        try { window.scrollTo(0,0); document.body.scrollTop = 0; document.documentElement.scrollTop = 0; } catch(e){}
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', doAfterDom, { once: true });
     } else {
-        showView('view-login');
+        doAfterDom();
     }
-    hideLoading();
 });
 
 function setupRealtimeListener() {
@@ -1805,6 +1855,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.error("Erro no logout:", err);
                         Sway.showToast('Erro ao sair. Tente novamente.', 'error', 3000);
                     });
+                    window.location.reload();
                 }
             });
         };
@@ -2441,3 +2492,184 @@ debugBtn.style.borderRadius = '5px';
 debugBtn.onclick = debugFirestoreState;
 document.body.appendChild(debugBtn);
 */
+
+// =================== PWA SERVICE WORKER REGISTRATION ===================
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/flashcards/sw.js', {
+      scope: '/flashcards/'
+    })
+    .then(registration => {
+      console.log('[PWA] Service Worker registrado:', registration);
+      
+      // Verificar updates periodicamente
+      setInterval(() => {
+        registration.update();
+      }, 60000); // A cada minuto
+      
+      // Notificar quando há uma nova versão
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            Sway.showToast('Atualização disponível! Recarregue para aplicar.', 'info', 5000);
+          }
+        });
+      });
+    })
+    .catch(error => {
+      console.error('[PWA] Erro ao registrar Service Worker:', error);
+    });
+  });
+  
+  // Ouvir mensagens do Service Worker
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data.type === 'OFFLINE') {
+      Sway.showToast('⚠️ Você está offline. Funcionalidade limitada.', 'warning', 3000);
+    }
+    if (event.data.type === 'ONLINE') {
+      Sway.showToast('✅ Conexão restaurada. Sincronizando...', 'success', 3000);
+    }
+  });
+}
+
+// =================== DETECÇÃO DE CONEXÃO ===================
+
+window.addEventListener('online', () => {
+  console.log('[PWA] Conexão restaurada');
+  Sway.showToast('✅ Você está online novamente', 'success', 3000);
+  
+  // Tentar sincronizar dados
+  if ('serviceWorker' in navigator && 'ServiceWorkerContainer' in window) {
+    navigator.serviceWorker.controller?.postMessage({
+      type: 'SYNC',
+      action: 'syncFlashcards'
+    });
+  }
+});
+
+window.addEventListener('offline', () => {
+  console.log('[PWA] Conexão perdida');
+  Sway.showToast('⚠️ Você está offline. Os dados serão salvos localmente.', 'warning', 4000);
+});
+
+// =================== INSTALL PROMPT (Para botão "Instalar") ===================
+
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  
+  // Mostrar botão de instalar na home view
+  const homeView = document.getElementById('view-home');
+  if (homeView && !document.getElementById('btn-install-app')) {
+    const installBtn = document.createElement('button');
+    installBtn.id = 'btn-install-app';
+    installBtn.className = 'text-sm bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 shadow-md fixed top-4 right-4 z-20 flex items-center';
+    installBtn.innerHTML = `
+      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+      </svg>
+      Instalar App
+    `;
+    
+    installBtn.onclick = async () => {
+      if (!deferredPrompt) {
+        Sway.showToast('App já instalado ou não disponível', 'info', 3000);
+        return;
+      }
+      
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`Instalação ${outcome === 'accepted' ? 'aceita' : 'rejeitada'}`);
+      deferredPrompt = null;
+      installBtn.style.display = 'none';
+    };
+    
+    document.body.appendChild(installBtn);
+  }
+});
+
+window.addEventListener('appinstalled', () => {
+  console.log('[PWA] App instalado com sucesso!');
+  Sway.showToast('✅ App instalado com sucesso! Você pode usar offline.', 'success', 4000);
+  deferredPrompt = null;
+  
+  const installBtn = document.getElementById('btn-install-app');
+  if (installBtn) {
+    installBtn.style.display = 'none';
+  }
+});
+
+// =================== SYNC PENDENTE DE DADOS ===================
+
+class OfflineDataSync {
+  constructor() {
+    this.pendingChanges = this.loadPendingChanges();
+  }
+
+  loadPendingChanges() {
+    try {
+      return JSON.parse(localStorage.getItem('pendingChanges')) || [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  savePendingChanges() {
+    localStorage.setItem('pendingChanges', JSON.stringify(this.pendingChanges));
+  }
+
+  addChange(type, data) {
+    this.pendingChanges.push({
+      type,
+      data,
+      timestamp: new Date().toISOString()
+    });
+    this.savePendingChanges();
+    console.log('[Offline] Mudança salva para sincronização later:', type);
+  }
+
+  async syncWhenOnline() {
+    if (!navigator.onLine) {
+      console.log('[Offline] Ainda offline, aguardando conexão');
+      return;
+    }
+
+    console.log('[Offline] Sincronizando', this.pendingChanges.length, 'mudanças pendentes');
+    
+    for (const change of this.pendingChanges) {
+      try {
+        if (change.type === 'updateReview') {
+          await updateDoc(doc(flashcardsCollectionRef, change.data.cardId), change.data.updates);
+        } else if (change.type === 'addCard') {
+          await addDoc(flashcardsCollectionRef, change.data);
+        }
+      } catch (error) {
+        console.error('[Offline] Erro ao sincronizar:', error);
+        return; // Parar se houver erro
+      }
+    }
+
+    this.pendingChanges = [];
+    this.savePendingChanges();
+    console.log('[Offline] Sincronização completa!');
+    Sway.showToast('✅ Dados sincronizados com sucesso!', 'success', 3000);
+  }
+}
+
+const offlineSync = new OfflineDataSync();
+
+// Sincronizar quando voltar online
+window.addEventListener('online', () => {
+  offlineSync.syncWhenOnline();
+});
+
+// Tentar sincronizar ao carregar se há pendências
+window.addEventListener('load', () => {
+  if (navigator.onLine && offlineSync.pendingChanges.length > 0) {
+    setTimeout(() => offlineSync.syncWhenOnline(), 2000);
+  }
+});

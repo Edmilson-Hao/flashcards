@@ -40,6 +40,12 @@ body {
   width: 100%;
   min-height: 100vh;
   padding: 1rem;
+  box-sizing: border-box;
+}
+
+#app-container {
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 #view-revisao {
@@ -50,6 +56,25 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+/* Centralizar verticalmente a tela de login */
+#view-login {
+  display: flex;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 100vh;
+  padding: 1rem;
+  color: var(--text-primary) !important;
+}
+
+#view-login > div > h1 {
+  color: #f8fafc !important; /* equivalente a text-white / var(--text-primary) */
+}
+
+/* Garantir que o painel interno fique com largura contida e centralizado */
+#view-login > div {
+  margin: 0 auto;
 }
 
 /* Flashcard */

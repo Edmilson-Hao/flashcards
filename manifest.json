@@ -1,0 +1,22 @@
+{
+  "name": "Flashcards Ebbinghaus",
+  "short_name": "Flashcards",
+  "description": "Estudar com flashcards e técnica Ebbinghaus",
+  "start_url": "/flashcards/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#111827",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
