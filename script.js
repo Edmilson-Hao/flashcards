@@ -73,7 +73,7 @@ function showLoading(text = "Carregando...") {
     }
 }
 
-function showView(viewId) {
+function showView(viewId, preserveSession = false) {
     // Esconde todas as views e mostra apenas a solicitada
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     const view = document.getElementById(viewId);
@@ -84,18 +84,16 @@ function showView(viewId) {
     // Remover classes de background de resultado (se houver)
     document.body.classList.remove('correct-bg', 'incorrect-bg');
 
-    // Garantir que o viewport mostre o topo da nova view (resolve o scroll residual)
-    // Compatível com navegadores antigos e modernos
+    // Scroll para o topo
     try {
         window.scrollTo(0, 0);
         document.body.scrollTop = 0;
         document.documentElement.scrollTop = 0;
-    } catch (e) {
-        /* ignore */
-    }
+    } catch (e) { /* ignore */ }
 
-    // Quando entrar na view-revisao, configurar sessão e carregar primeiro card
-    if (viewId === 'view-revisao') {
+    // CORREÇÃO AQUI:
+    // Só reseta a sessão se preserveSession for falso (padrão)
+    if (viewId === 'view-revisao' && !preserveSession) {
         isForcedSession = false;
         
         const novaRodadaBtn = document.getElementById('btn-nova-rodada');
@@ -120,6 +118,12 @@ function showView(viewId) {
     if (viewId === 'view-estatisticas') renderEstatisticas();
 }
 
+// =================== REVISÃO ===================
+let currentCard = null;
+let isFlipped = false;
+let currentDirection = 'forward';
+
+// =================== RESUMO DA REVISÃO ===================
 function showMessage(elementId, message, type = 'info', duration = 3000) {
     const element = document.getElementById(elementId);
     if (!element) return;
@@ -152,11 +156,6 @@ function showMessage(elementId, message, type = 'info', duration = 3000) {
     }
 }
 
-// =================== REVISÃO ===================
-let currentCard = null;
-let isFlipped = false;
-let currentDirection = 'forward';
-
 function updateReviewCounter() {
     const cardsRemainingElement = document.getElementById('cards-remaining');
     const cardsDueTodayElement = document.getElementById('cards-due-today');
@@ -188,151 +187,131 @@ function updateReviewCounter() {
 }
 
 // =================== RESUMO DA REVISÃO ===================
+function closeReviewSummaryModal() {
+    const existing = document.getElementById('review-summary-modal');
+    if (existing) existing.remove();
+}
 
 function showReviewSummary() {
     console.log("Mostrando resumo da revisão...");
-    
+
     // Obter estatísticas da sessão
     const statsStr = sessionStorage.getItem('reviewStats');
     const stats = statsStr ? JSON.parse(statsStr) : { total: 0, correct: 0, cards: [] };
-    
+
     const totalCards = stats.total || 0;
     const correctCards = stats.correct || 0;
     const incorrectCards = totalCards - correctCards;
     const accuracy = totalCards > 0 ? Math.round((correctCards / totalCards) * 100) : 0;
-    
-    console.log("Estatísticas da sessão:", { totalCards, correctCards, accuracy });
-    
-    // Obter a view de revisão
-    const reviewView = document.getElementById('view-revisao');
-    if (!reviewView) {
-        console.error("View de revisão não encontrada");
-        return;
-    }
-    
-    // Determinar mensagem baseada na precisão
-    let emoji, message, colorClass;
+
+    let emoji = '🎉';
+    let message = 'Revisão concluída';
+    let colorClass = 'text-white';
     if (accuracy >= 90) {
         emoji = '🏆';
         message = 'Excelente! Seu domínio está impressionante!';
         colorClass = 'text-green-400';
     } else if (accuracy >= 75) {
         emoji = '🎯';
-        message = 'Muito bom! Continue assim!';
-        colorClass = 'text-green-300';
-    } else if (accuracy >= 60) {
+        message = 'Muito bem! Continue assim.';
+        colorClass = 'text-indigo-400';
+    } else if (accuracy >= 50) {
         emoji = '👍';
-        message = 'Bom trabalho! A prática leva à perfeição.';
-        colorClass = 'text-yellow-300';
-    } else if (accuracy >= 40) {
-        emoji = '😐';
-        message = 'Continue praticando! Você está melhorando.';
-        colorClass = 'text-yellow-400';
+        message = 'Bom progresso — pratique um pouco mais.';
+        colorClass = 'text-amber-400';
     } else {
         emoji = '💪';
-        message = 'Não desista! Cada erro é uma oportunidade de aprender.';
-        colorClass = 'text-red-300';
+        message = 'Continue praticando — você chega lá!';
+        colorClass = 'text-red-400';
     }
-    
-    // Criar HTML do resumo (sem onclick inline)
-    const summaryHTML = `
-        <div class="w-full max-w-2xl mx-auto p-6">
-            <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-8 text-center">
-                <div class="text-6xl mb-4">${emoji}</div>
-                <h2 class="text-2xl font-bold text-white mb-2">Revisão Concluída!</h2>
-                <p class="text-slate-300 mb-8">${message}</p>
-                
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div class="bg-slate-900 rounded-lg p-4">
-                        <div class="text-3xl font-bold text-indigo-400">${totalCards}</div>
-                        <div class="text-sm text-slate-400 mt-1">Cards Revisados</div>
-                    </div>
-                    
-                    <div class="bg-slate-900 rounded-lg p-4">
-                        <div class="text-3xl font-bold text-green-400">${correctCards}</div>
-                        <div class="text-sm text-slate-400 mt-1">Acertos</div>
-                    </div>
-                    
-                    <div class="bg-slate-900 rounded-lg p-4">
-                        <div class="text-3xl font-bold text-red-400">${incorrectCards}</div>
-                        <div class="text-sm text-slate-400 mt-1">Erros</div>
-                    </div>
-                    
-                    <div class="bg-slate-900 rounded-lg p-4">
-                        <div class="text-3xl font-bold ${colorClass}">${accuracy}%</div>
-                        <div class="text-sm text-slate-400 mt-1">Precisão</div>
-                    </div>
-                </div>
-                
-                <div class="mb-8">
-                    <div class="text-lg font-semibold text-slate-300 mb-2">Progresso da Sessão</div>
-                    <div class="w-full bg-slate-700 rounded-full h-4">
-                        <div class="bg-gradient-to-r from-indigo-500 to-purple-500 h-4 rounded-full transition-all duration-500" 
-                             style="width: ${accuracy}%"></div>
-                    </div>
-                    <div class="flex justify-between text-sm text-slate-400 mt-2">
-                        <span>0%</span>
-                        <span>${accuracy}%</span>
-                        <span>100%</span>
-                    </div>
-                </div>
-                
-                <div class="text-sm text-slate-400 mb-8">
-                    <p class="mb-1">⏰ Próxima revisão programada para amanhã</p>
-                    <p>📊 ${isForcedSession ? 'Sessão forçada concluída' : 'Revisão diária completa'}</p>
-                </div>
-                
-                <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <button id="btn-return-home" 
-                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 shadow-md">
-                        Voltar ao Menu Principal
-                    </button>
-                    <button id="btn-new-session" 
-                            class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 shadow-md border border-slate-600">
-                        Nova Sessão de Revisão
-                    </button>
-                </div>
+
+    // Remover modal anterior, se existir
+    closeReviewSummaryModal();
+
+    // Montar modal
+    const container = document.createElement('div');
+    container.id = 'review-summary-modal';
+    container.innerHTML = `
+      <div class="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true" role="dialog">
+        <div class="absolute inset-0 bg-black/60" id="review-summary-overlay"></div>
+        <div id="review-summary-card" class="relative bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4">
+          <div class="text-center">
+            <div class="text-6xl mb-2">${emoji}</div>
+            <h2 class="text-2xl font-bold text-white mb-2">Revisão Concluída!</h2>
+            <p class="text-slate-300 mb-4">${message}</p>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 text-center mb-6">
+            <div>
+              <div class="text-3xl font-bold text-indigo-400">${totalCards}</div>
+              <div class="text-sm text-slate-400 mt-1">Cards Revisados</div>
             </div>
-            
-            <div class="text-center mt-8">
-                <button id="btn-back-summary" 
-                        class="text-slate-400 hover:text-white font-medium transition duration-200 inline-flex items-center">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                    </svg>
-                    Voltar para Home
-                </button>
+            <div>
+              <div class="text-3xl font-bold text-green-400">${correctCards}</div>
+              <div class="text-sm text-slate-400 mt-1">Acertos</div>
             </div>
+            <div>
+              <div class="text-3xl font-bold text-red-400">${incorrectCards}</div>
+              <div class="text-sm text-slate-400 mt-1">Erros</div>
+            </div>
+          </div>
+
+          <div class="mb-6 text-center">
+            <div class="text-sm text-slate-400">Precisão: <span class="${colorClass} font-semibold">${accuracy}%</span></div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3 justify-center">
+            <button id="summary-new-session" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition">Nova Sessão</button>
+            <button id="summary-forced-session" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 px-6 rounded-lg transition">Forçar Sessão</button>
+            <button id="summary-return-home" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-6 rounded-lg transition">Voltar ao Menu</button>
+          </div>
+
+          <div class="mt-4 text-center">
+            <button id="summary-close" class="text-slate-400 hover:text-white text-sm">Fechar</button>
+          </div>
         </div>
+      </div>
     `;
-    
-    // Atualizar a view
-    reviewView.innerHTML = summaryHTML;
-    
-    // Adicionar event listeners após o HTML ser inserido
-    setTimeout(() => {
-        // Botão "Voltar ao Menu Principal"
-        const btnReturnHome = document.getElementById('btn-return-home');
-        if (btnReturnHome) {
-            btnReturnHome.addEventListener('click', returnToHome);
-        }
-        
-        // Botão "Nova Sessão de Revisão"
-        const btnNewSession = document.getElementById('btn-new-session');
-        if (btnNewSession) {
-            btnNewSession.addEventListener('click', startNewReviewSession);
-        }
-        
-        // Botão "Voltar para Home" (no rodapé)
-        const btnBackSummary = document.getElementById('btn-back-summary');
-        if (btnBackSummary) {
-            btnBackSummary.addEventListener('click', () => {
-                returnToHome();
-            });
-        }
-    }, 100);
-    
-    // Limpar estatísticas da sessão
+
+    document.body.appendChild(container);
+
+    // Event listeners do modal
+    const btnNew = document.getElementById('summary-new-session');
+    const btnForced = document.getElementById('summary-forced-session');
+    const btnHome = document.getElementById('summary-return-home');
+    const btnClose = document.getElementById('summary-close');
+    const overlay = document.getElementById('review-summary-overlay');
+
+    if (btnNew) {
+        btnNew.addEventListener('click', () => {
+            closeReviewSummaryModal();
+            startNewReviewSession();
+        });
+    }
+
+    if (btnForced) {
+        btnForced.addEventListener('click', () => {
+            closeReviewSummaryModal();
+            // garantir que a view de revisão esteja visível
+            try { showView('view-revisao'); } catch (e) { /* ignore */ }
+            startForcedReviewSession();
+        });
+    }
+
+    if (btnHome) {
+        btnHome.addEventListener('click', () => {
+            closeReviewSummaryModal();
+            returnToHome();
+        });
+    }
+
+    if (btnClose) {
+        btnClose.addEventListener('click', () => closeReviewSummaryModal());
+    }
+
+    if (overlay) overlay.addEventListener('click', () => closeReviewSummaryModal());
+
+    // Remover estatísticas da sessão (mantendo comportamento atual)
     sessionStorage.removeItem('reviewStats');
 }
 
@@ -684,9 +663,12 @@ function setupReviewSession() {
     const now = new Date();
 
     if (isForcedSession) {
+        // CORREÇÃO: Removido o filtro .filter(card => card.reviewLevel < 9)
+        // Assim ele pega TODOS os cards, inclusive os mestrados.
         currentReviewSession = allFlashcards
-            .filter(card => card.reviewLevel < 9)
+            .slice() // Cria uma cópia do array para não afetar o original
             .sort(() => 0.5 - Math.random());
+            
         console.log("Sessão forçada:", currentReviewSession.length, "cards");
     } else {
         currentReviewSession = allFlashcards
@@ -1131,34 +1113,43 @@ async function updateReviewLevel(correct) {
 
 function startForcedReviewSession() {
     Sway.confirm(
-        "Iniciar nova rodada de revisão?\n\nIsso revisará todos os cards disponíveis, independentemente da data de revisão.",
+        "Iniciar nova rodada de revisão?\n\nIsso revisará TODOS os cards disponíveis, independentemente da data de vencimento.",
         "Nova Rodada de Revisão"
     ).then(confirmed => {
         if (!confirmed) return;
         
+        // 1. Define como forçada
         isForcedSession = true;
-        setupReviewSession();
         
+        // 2. CORREÇÃO: Chama showView avisando para preservar a sessão atual (passando true)
+        showView('view-revisao', true);
+        
+        // 3. Configura a sessão
+        setupReviewSession();
+        loadNextCard();
+        
+        // 4. Atualiza visual do botão
         const novaRodadaBtn = document.getElementById('btn-nova-rodada');
         if (novaRodadaBtn) {
-        novaRodadaBtn.innerHTML = `
-            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            Sessão Forçada
-        `;
-        novaRodadaBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
-        novaRodadaBtn.classList.remove('bg-amber-500', 'hover:bg-amber-600');
+            novaRodadaBtn.innerHTML = `
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Sessão Forçada
+            `;
+            novaRodadaBtn.classList.remove('bg-amber-500', 'hover:bg-amber-600');
+            novaRodadaBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+            
+            novaRodadaBtn.disabled = true;
+            setTimeout(() => {
+                if (novaRodadaBtn) novaRodadaBtn.disabled = false;
+            }, 2000);
+        }
         
-        novaRodadaBtn.disabled = true;
-        setTimeout(() => {
-            if (novaRodadaBtn) novaRodadaBtn.disabled = false;
-        }, 2000);
-    }
-    
-    loadNextCard();
-    });    
+        Sway.showToast('Modo de revisão forçada ativado!', 'success', 3000);
+        
+    }).catch(err => console.error("Erro na confirmação:", err));    
 }
 
 // =================== BIBLIOTECA ===================
@@ -1762,6 +1753,7 @@ onAuthStateChanged(auth, (user) => {
             flashcardsCollectionRef = collection(db, "users", user.uid, "flashcards");
 
             // start listener and show home AFTER DOM is ready
+           
             setupRealtimeListener();
             showView('view-home');
         } else {
@@ -2029,9 +2021,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const typingSubmitBtn = document.getElementById('typing-submit-btn');
     if (typingSubmitBtn) {
         typingSubmitBtn.onclick = () => {
-            const input = document.getElementById('typing-input')?.value.trim() || '';
+            const inputEl = document.getElementById('typing-input');
+            const input = inputEl?.value.trim() || '';
             const msg = document.getElementById('typing-message');
-            if (!input || !msg) return;
+            if (!input || !msg || !currentCard) return;
+
+            // Desabilita para evitar cliques duplos
+            typingSubmitBtn.disabled = true;
+            if (inputEl) inputEl.disabled = true;
 
             let correct;
             if (currentDirection === 'forward') {
@@ -2039,11 +2036,50 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 correct = input.toLowerCase() === (currentCard?.palavraOriginal || '').toLowerCase();
             }
-            
+
             msg.textContent = correct ? "Correto!" : `Errado. Resposta: ${currentDirection === 'forward' ? currentCard?.traducao : currentCard?.palavraOriginal}`;
             msg.className = correct ? "text-green-600 font-bold" : "text-red-600 font-bold";
-            flipCard(correct);
-            updateReviewLevel(correct);
+
+            // Atualiza estatísticas da sessão (contagem regressiva)
+            try {
+                updateSessionStats(correct);
+            } catch (e) {
+                console.error("Erro ao atualizar session stats:", e);
+            }
+
+            if (correct) {
+                // Comportamento igual a múltipla escolha: aplica updateReviewLevel e carrega próximo card
+                setTimeout(() => {
+                    try {
+                        updateReviewLevel(true);
+                    } catch (e) {
+                        console.error("Erro updateReviewLevel:", e);
+                    }
+                    loadNextCard();
+                    // reabilitar input
+                    typingSubmitBtn.disabled = false;
+                    if (inputEl) {
+                        inputEl.disabled = false;
+                        inputEl.value = '';
+                    }
+                    if (msg) {
+                        setTimeout(() => { msg.textContent = ''; }, 1500);
+                    }
+                }, 800);
+            } else {
+                // Se errou, virar o card e registrar no nível
+                setTimeout(() => {
+                    flipCard(false);
+                    try {
+                        updateReviewLevel(false);
+                    } catch (e) {
+                        console.error("Erro updateReviewLevel:", e);
+                    }
+                    // manter o botão habilitado para permitir "Próximo" manual
+                    typingSubmitBtn.disabled = false;
+                    if (inputEl) inputEl.disabled = true; // bloquear digitação quando verso exibido
+                }, 1000);
+            }
         };
     }
     
@@ -2058,8 +2094,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // Próximo card
-    // No event listener do btn-next-card, adicione:
     // Próximo card
     const btnNextCard = document.getElementById('btn-next-card');
     if (btnNextCard) {
@@ -2570,9 +2604,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
     installBtn.className = 'text-sm bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 shadow-md fixed top-4 right-4 z-20 flex items-center';
     installBtn.innerHTML = `
       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-      </svg>
-      Instalar App
+        <path d="M24 9.5c3.2 0 5.8 1.1 7.7 2.9l5.1-5.1C33.7 3.5 29.2 1 24 1 15.6 1 8.5 5.5 4.7 12.3l6.5 5c1.7-5.1 6.6-8.8 12.8-8.8z" fill="#EA4335"/><path d="M46.7 24.5c0-1.7-.1-3.3-.4-4.9H24v9.2h12.5c-.6 3.1-2.4 5.7-4.9 7.5l6.7 5.2c4.1-3.8 6.5-9.3 6.5-15.5z" fill="#4285F4"/><path d="M10.2 29.7c-.5-1.5-.7-3.1-.7-4.7s.2-3.2.7-4.7l-6.5-5.1C3.4 17.5 3 20.9 3 24.5s.4 7 1.2 10.3l6-5.1z" fill="#FBBC05"/><path d="M24 47.9c6.4 0 11.9-2.1 15.9-5.7l-6.7-5.2c-2.3 1.5-5.2 2.4-9.2 2.4-6.2 0-11.2-4-13.1-9.5l-6.5 5.1c3.8 6.8 11.1 11.3 18.5 11.3z" fill="#34A853"/>
     `;
     
     installBtn.onclick = async () => {
