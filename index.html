@@ -1,501 +1,302 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flashcards Ebbinghaus</title>
-    <!-- Carrega o Tailwind CSS para estilos base e utilitários -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Carrega estilos customizados -->
-    <link rel="stylesheet" href="style.css">
-    <link rel="shortcut icon" href="icon-192x192.png" type="image/x-icon">
-    <!-- PWA Meta Tags -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#4f46e5">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Flashcards">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%234f46e5' width='180' height='180'/><text x='90' y='90' dominant-baseline='middle' text-anchor='middle' font-size='90' font-weight='bold' fill='white' font-family='Arial'>F</text></svg>">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Flashcards Mobile First</title>
+  
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen">
+<body>
 
-    <!-- Container Principal da Aplicação -->
-<div id="app-container" class="bg-gradient-to-br from-gray-900 to-slate-900 min-h-screen">
-
-        <!-- 0. Tela de Carregamento (Inicialmente visível) -->
-        <div id="view-loading" class="view w-full h-screen flex flex-col items-center justify-center text-gray-500">
-            <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p class="mt-4">Verificando autenticação...</p>
-        </div>
-
-        <!-- 1. Tela de Login -->
-        <div id="view-login" class="view hidden">
-            <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-8 max-w-sm w-full text-center">
-                <h1 class="text-3xl font-bold text-white mb-6">Bem-Vindo ao Flashcards!</h1>
-                <p class="text-gray-600 mb-8">Faça login para começar a gerenciar seus flashcards.</p>
-                <button id="btn-login-google" class="w-full flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-300 shadow-md">
-                    <svg class="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 48 48">
-                        <path d="M24 9.5c3.2 0 5.8 1.1 7.7 2.9l5.1-5.1C33.7 3.5 29.2 1 24 1 15.6 1 8.5 5.5 4.7 12.3l6.5 5c1.7-5.1 6.6-8.8 12.8-8.8z" fill="#EA4335"/><path d="M46.7 24.5c0-1.7-.1-3.3-.4-4.9H24v9.2h12.5c-.6 3.1-2.4 5.7-4.9 7.5l6.7 5.2c4.1-3.8 6.5-9.3 6.5-15.5z" fill="#4285F4"/><path d="M10.2 29.7c-.5-1.5-.7-3.1-.7-4.7s.2-3.2.7-4.7l-6.5-5.1C3.4 17.5 3 20.9 3 24.5s.4 7 1.2 10.3l6-5.1z" fill="#FBBC05"/><path d="M24 47.9c6.4 0 11.9-2.1 15.9-5.7l-6.7-5.2c-2.3 1.5-5.2 2.4-9.2 2.4-6.2 0-11.2-4-13.1-9.5l-6.5 5.1c3.8 6.8 11.1 11.3 18.5 11.3z" fill="#34A853"/>
-                    </svg>
-                    Entrar com Google
-                </button>
-                <div id="login-message" class="mt-4 text-sm text-red-500 hidden"></div>
-            </div>
-        </div>
-
-        <!-- 2. Tela Home (Menu) -->
-        <div id="view-home" class="view hidden w-full h-full flex flex-col items-center justify-center p-4">
-            <h1 class="text-4xl font-extrabold text-gray-900 mb-10">FLASH CARDS</h1>
-
-            <!-- Layout conforme imagem: 66vw de largura e alinhamento vertical/horizontal -->
-            <div class="flex flex-col space-y-4 items-center w-full max-w-xl md:w-66vw" style="max-height: 80vh;">
-                <button id="btn-home-adicionar" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xl font-bold py-4 rounded-lg transition duration-300 shadow-lg">
-                    Adicionar Cards
-                </button>
-                <button id="btn-home-revisar" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xl font-bold py-4 rounded-lg transition duration-300 shadow-lg">
-                    Revisar
-                </button>
-                <button id="btn-home-biblioteca" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white text-xl font-bold py-4 rounded-lg transition duration-300 shadow-lg">
-                    Biblioteca
-                </button>
-            </div>
-
-            <!-- Informação do Usuário (Rodapé/Cantoneira) -->
-            <div class="fixed bottom-4 right-4 bg-white p-3 rounded-lg shadow-xl text-sm text-gray-700 z-10">
-                Usuário: <span id="user-display">Carregando...</span>
-                <button id="btn-logout" class="ml-3 text-red-500 hover:text-red-700 font-medium">Sair</button>
-            </div>
-        </div>
-
-        <!-- 3. Tela de Adicionar Cards (Sub-menu) -->
-        <div id="view-add-menu" class="view hidden w-full flex flex-col items-center justify-center p-4">
-            <h1 class="text-3xl font-bold text-gray-800 mb-10">ADICIONAR CARDS</h1>
-            <div class="flex flex-col space-y-6 w-full max-w-lg">
-                <button id="btn-add-manual" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-semibold py-4 rounded-lg transition duration-300 shadow-lg">
-                    Manual (Individualmente)
-                </button>
-                <button id="btn-add-automatico" class="w-full bg-purple-600 hover:bg-purple-700 text-white text-lg font-semibold py-4 rounded-lg transition duration-300 shadow-lg">
-                    Automático (JSON em Massa)
-                </button>
-            </div>
-            <button id="btn-back-from-add-menu" class="mt-6 text-slate-400 hover:text-white font-medium transition duration-200">← Voltar</button>
-
-        </div>
-
-        <!-- 3a. Div Adicionar Manual - ATUALIZADO -->
-<div id="view-add-manual" class="view hidden w-full max-w-2xl bg-slate-800 border border-slate-700 p-8 rounded-xl shadow-2xl">
-    <h2 class="text-2xl font-bold text-gray-800 mb-6">Cadastro Manual de Flashcard</h2>
-    <form id="form-add-manual" class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Idioma Original</label>
-                <input type="text" id="manual-idioma-original" required 
-                       placeholder="Ex: Inglês, Espanhol..." 
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Idioma da Tradução</label>
-                <input type="text" id="manual-idioma-traducao" required 
-                       placeholder="Ex: Português" 
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
-            </div>
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700">Palavra / Frase (Original)</label>
-            <input type="text" id="manual-palavra" required 
-                   placeholder="Ex: Hello, Manzana..." 
-                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700">Tradução (Resposta Correta)</label>
-            <input type="text" id="manual-traducao" required 
-                   placeholder="Ex: Olá, Maçã..." 
-                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700">Outras Opções (para múltipla escolha)</label>
-            <p class="text-sm text-gray-500 mb-2">Adicione opções erradas para aparecerem nas questões (uma por linha):</p>
-            <textarea id="manual-outras-opcoes" rows="3" placeholder="Exemplo:
-Eterno
-Permanente
-Duradouro" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"></textarea>
-            <p class="text-xs text-gray-400 mt-1">Deixe em branco para gerar automaticamente do banco de dados.</p>
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700">Exemplos de Uso (Separe com ponto e vírgula ';')</label>
-            <textarea id="manual-exemplos" rows="4" required 
-                      placeholder="Ex: Hello, how are you?; Hello world!; Hello my friend..." 
-                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border"></textarea>
-        </div>
-        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-lg transition duration-300">
-            Salvar Card
-        </button>
-    </form>
-    <div id="manual-message" class="mt-4 text-center font-medium"></div>
-    <button id="btn-back-from-manual" class="mt-6 text-slate-400 hover:text-white font-medium transition duration-200">← Voltar</button>
-</div>
-
-<!-- 3b. Div Adicionar Automático (JSON) - ATUALIZADO -->
-<div id="view-add-automatico" class="view hidden w-full max-w-2xl bg-slate-800 border border-slate-700 p-8 rounded-xl shadow-2xl">
-    <h2 class="text-2xl font-bold text-gray-800 mb-6">Cadastro Automático (JSON)</h2>
-    <p class="text-gray-600 mb-4">Cole o array JSON de flashcards no formato abaixo:</p>
-    
-    <!-- Container do exemplo JSON com botão de copiar -->
-    <div class="relative mb-4">
-        <button id="btn-copiar-json" class="absolute right-2 top-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-1 px-3 rounded-md transition duration-200 flex items-center">
-            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
-            </svg>
-            Copiar
-        </button>
-        <pre id="json-exemplo" class="bg-slate-900 border border-slate-700 p-3 rounded-md text-sm text-slate-300 overflow-auto max-h-64">
-[
-  {
-    "idiomaOriginal": "Inglês",
-    "palavraOriginal": "Ephemeral",
-    "idiomaTraducao": "Português",
-    "traducao": "Efêmero",
-    "outrasOpcoes": [
-      "Eterno",
-      "Permanente",
-      "Duradouro"
-    ],
-    "exemplos": [
-      "The beauty of a sunset is ephemeral.",
-      "Ephemeral trends come and go quickly.",
-      "His fame proved to be an ephemeral thing.",
-      "We enjoyed the ephemeral pleasure of the picnic."
-    ]
-  },
-  {
-    "idiomaOriginal": "Espanhol",
-    "palavraOriginal": "Manzana",
-    "idiomaTraducao": "Português",
-    "traducao": "Maçã",
-    "outrasOpcoes": [
-      "Banana",
-      "Laranja",
-      "Uva"
-    ],
-    "exemplos": [
-      "Me gusta comer una manzana cada día.",
-      "La manzana es roja y deliciosa."
-    ]
-  }
-]
-        </pre>
+  <main>
+    <!-- 1. LOADING -->
+    <div id="loading" class="center-content">
+      <div class="spinner"></div>
+      <p>Verificando acesso...</p>
     </div>
-    
-    <textarea id="automatico-json-input" rows="10" placeholder='Cole seu JSON aqui...' class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border font-mono text-sm"></textarea>
-    <button id="btn-processar-json" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition duration-300 flex items-center justify-center">
-        <svg class="w-5 h-5 mr-2 hidden" id="json-processing-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <span id="json-button-text">Processar e Salvar Cards</span>
-    </button>
-    <div id="automatico-message" class="mt-4 text-center font-medium"></div>
-    <button id="btn-back-from-automatico" class="mt-6 text-slate-400 hover:text-white font-medium transition duration-200">← Voltar</button>
-</div>
 
-<!-- 4. Tela de Revisão - VERSÃO CORRIGIDA -->
-<div id="view-revisao" class="view hidden w-full max-w-4xl mx-auto p-4 md:p-6">
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-        <h1 class="text-2xl md:text-3xl font-bold text-white mb-4 md:mb-0">REVISÃO DE FLASHCARDS</h1>
+    <!-- 2. LOGIN -->
+    <div id="loginPage" class="hidden center-content">
+      <h1 style="color: #454E9E;">Flashcards</h1>
+      <p>Estude de forma inteligente.</p>
+      <button id="btnLogin" class="btn-google">Entrar com Google</button>
+    </div>
+
+    <!-- 3. HOME (MENU PRINCIPAL) -->
+    <div id="homePage" class="hidden center-content">
+      <div class="user-header">
+        <img id="userPhoto" src="" alt="Avatar">
+        <div>
+           <h2 id="userName" style="margin:0; font-size: 1.2rem;">Usuário</h2>
+           <p id="userEmail" style="margin:0; font-size: 0.9rem;">email@exemplo.com</p>
+        </div>
+      </div>
+      
+      <hr class="divider">
+
+      <div class="action-menu">
+        <button id="btnAdd" class="btn-action">
+          <span class="material-icons">add_circle</span> Adicionar
+        </button>
+        <button id="btnReview" class="btn-action">
+          <span class="material-icons">sync</span> Revisar
+        </button>
+        <button id="btnLibrary" class="btn-action">
+          <span class="material-icons">style</span> Biblioteca
+        </button>
+        <button id="btnAbout" class="btn-action">
+          <span class="material-icons">info</span> Sobre
+        </button>
+      </div>
+
+      <button id="btnLogout" class="btn-logout">Sair</button>
+    </div>
+
+    <!-- 4. NOVA TELA: ADICIONAR FLASHCARD -->
+    <div id="addPage" class="hidden container-left">
+      <!-- Botão Voltar -->
+      <button id="btnBackAdd" class="btn-back">
+        <span class="material-icons">arrow_back</span> Voltar
+      </button>
+
+      <h2>Novo Flashcard</h2>
+      <p style="font-size: 0.9rem; margin-bottom: 20px;">Preencha os dados para criar o card.</p>
+
+      <form id="formAddCard">
+        <!-- Idiomas -->
+        <div class="input-group">
+            <label>Idioma Original (Aprendizado)</label>
+            <input type="text" id="langOriginal" placeholder="Ex: Inglês" value="Inglês">
+        </div>
+
+        <div class="input-group">
+            <label>Palavra Original</label>
+            <input type="text" id="wordOriginal" placeholder="Ex: Apple" required>
+        </div>
+
+        <div class="input-group">
+            <label>Idioma Tradução (Nativo)</label>
+            <input type="text" id="langTranslation" placeholder="Ex: Português" value="Português">
+        </div>
+
+        <div class="input-group">
+            <label>Tradução</label>
+            <input type="text" id="wordTranslation" placeholder="Ex: Maçã" required>
+        </div>
+
+        <hr class="divider">
+        <label>3 Exemplos de frases:</label>
         
-        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div id="review-counter" class="text-sm text-slate-300 bg-slate-800/50 px-3 py-2 rounded-lg">
-                <span id="cards-remaining">0</span> card(s) restantes
-            </div>
-            <button id="btn-nova-rodada" 
-                    class="text-sm bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 shadow-md flex items-center">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                Nova Rodada
-            </button>
-        </div>
+        <input type="text" class="input-example" id="ex1" placeholder="Ex: I ate an apple." required>
+        <input type="text" class="input-example" id="ex2" placeholder="Ex: Apple is red." required>
+        <input type="text" class="input-example" id="ex3" placeholder="Ex: Give me an apple." required>
+
+        <button type="submit" class="btn-save">Salvar Flashcard</button>
+      </form>
     </div>
 
-    <!-- Flashcard Container -->
-    <div class="mb-8">
-        <div id="flashcard-area" class="w-full max-w-2xl mx-auto h-64 md:h-80 relative">
-            <!-- O Flashcard principal -->
-            <div id="flashcard-container" class="flashcard-flip w-full h-full cursor-pointer">
-                <!-- Frente do Card (Palavra/Frase) -->
-                <div id="card-front" class="flashcard-face flashcard-front">
-                    <span id="card-idioma-front" class="absolute top-4 left-4 text-sm font-semibold text-indigo-300 bg-indigo-900/50 px-3 py-1 rounded-full backdrop-blur-sm">Idioma</span>
-                    <p id="card-palavra-front" class="text-3xl md:text-4xl font-bold text-center px-4"></p>
-                </div>
+    <!-- 5. TELA DE REVISÃO (MÚLTIPLA ESCOLHA) -->
+    <div id="reviewPage" class="hidden center-content" style="justify-content: flex-start; padding-top: 20px;">
+        <div style="width: 100%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <button id="btnBackReview" class="btn-back" style="margin:0;"><span class="material-icons">close</span></button>
+            <span id="reviewCounter" style="font-weight: bold; color: #454E9E;">...</span>
+        </div>
 
-                <!-- Verso do Card (Tradução e Detalhes) -->
-                <div id="card-back" class="flashcard-face flashcard-back">
-                    <p class="text-lg font-bold text-indigo-300 mb-2">Tradução:</p>
-                    <p id="card-traducao-back" class="text-2xl md:text-3xl font-bold text-center mb-4"></p>
-                    <p class="text-md font-bold text-indigo-300 mb-2">Exemplos de Uso:</p>
-                    <ul id="card-exemplos-back" class="list-disc list-inside text-left text-sm text-slate-300 space-y-1 px-4 max-h-24 overflow-y-auto">
-                        <!-- Exemplos serão inseridos aqui -->
-                    </ul>
+        <div id="flashcard" class="flashcard-container">
+            <div id="cardInner" class="card-inner">
+                <div class="card-front">
+                    <span id="cardLangOriginal" class="card-label">IDIOMA</span>
+                    <h2 id="cardWordOriginal" class="card-word">Palavra</h2>
+                    <p class="card-hint">Escolha a tradução correta</p>
                 </div>
             </div>
         </div>
-        
-        <p id="revisao-message" class="text-center mt-4 text-sm text-slate-300">
-            <span id="cards-due-today">0</span> card(s) vencidos hoje | Sessão: <span id="session-count">0</span> revisados
-        </p>
+
+        <div id="quizOptions" class="quiz-grid"></div>
     </div>
 
-    <!-- Controles de Revisão -->
-    <div id="review-controls" class="w-full max-w-2xl mx-auto">
-        <!-- Modo Múltipla Escolha -->
-        <div id="quiz-options-container" class="space-y-3 mb-6">
-            <button class="quiz-option-btn w-full text-left" data-index="0"></button>
-            <button class="quiz-option-btn w-full text-left" data-index="1"></button>
-            <button class="quiz-option-btn w-full text-left" data-index="2"></button>
-            <button class="quiz-option-btn w-full text-left" data-index="3"></button>
-        </div>
+    <div id="summaryPage" class="hidden center-content">
+        <div class="summary-card">
+            <span class="material-icons" style="font-size: 3rem; color: #F6AD55;">emoji_events</span>
+            <h2 style="color: #333; margin-top: 10px;">Sessão Finalizada!</h2>
+            <p style="color: #666;">Veja como você se saiu:</p>
 
-        <!-- Modo Digitação (Opcional) -->
-        <div id="quiz-typing-container" class="hidden space-y-3 mb-6">
-            <input type="text" id="typing-input" 
-                   placeholder="Digite a tradução..." 
-                   class="w-full bg-slate-800 border-2 border-slate-600 text-white p-3 rounded-lg shadow-md focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 focus:outline-none">
-            <button id="typing-submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition duration-300">
-                Verificar Resposta
-            </button>
-            <p id="typing-message" class="text-center mt-2 text-sm font-medium"></p>
-        </div>
-
-        <!-- Botões de Ação Após Revelar -->
-        <div id="review-result-controls" class="hidden flex justify-center">
-            <button id="btn-next-card" 
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-300 shadow-md">
-                Próximo Card →
-            </button>
-        </div>
-    </div>
-
-    <!-- Botão Voltar -->
-    <div class="text-center mt-8">
-        <button id="btn-back-from-revisao" 
-                class="text-slate-400 hover:text-white font-medium transition duration-200 inline-flex items-center">
-            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-            </svg>
-            Voltar para Home
-        </button>
-    </div>
-</div>
-
-<!-- 5. Tela de Biblioteca (Arquivo) - ATUALIZADA -->
-<div id="view-biblioteca" class="view hidden w-full p-4">
-    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">BIBLIOTECA DE FLASHCARDS</h1>
-
-    <!-- Botão de Estatísticas -->
-    <div class="flex justify-between items-center mb-4 max-w-6xl mx-auto">
-        <div class="text-sm text-gray-600">
-            <span id="total-cards-count">0</span> card(s) cadastrado(s)
-        </div>
-        <div class="flex space-x-2">
-            <button id="btn-estatisticas" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 shadow-md flex items-center">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                </svg>
-                Estatísticas
-            </button>
-            <button id="btn-limpar-biblioteca" class="text-sm bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 shadow-md flex items-center">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                </svg>
-                Limpar Tudo
-            </button>
-        </div>
-    </div>
-
-    <div class="overflow-x-auto bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-4 max-w-6xl mx-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Idioma</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Palavra / Frase</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nível Ebbinghaus</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Próxima Revisão</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxa Acerto</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-                </tr>
-            </thead>
-            <tbody id="biblioteca-table-body" class="bg-white divide-y divide-gray-200">
-                <!-- Linhas da tabela serão inseridas aqui -->
-            </tbody>
-        </table>
-        <p id="biblioteca-message" class="text-center p-4 text-gray-500">...</p>
-    </div>
-    <button id="btn-back-from-biblioteca" class="mt-6 text-slate-400 hover:text-white font-medium transition duration-200">← Voltar</button>
-</div>
-
-<!-- 6. Tela de Estatísticas -->
-<div id="view-estatisticas" class="view hidden w-full p-4">
-    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">ESTATÍSTICAS DO APRENDIZADO</h1>
-    
-    <!-- Card de Estatísticas Gerais -->
-    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <!-- Card Total de Flashcards -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-lg p-6 text-center">
-            <div class="text-4xl font-bold text-blue-600 mb-2" id="stats-total-cards">0</div>
-            <div class="text-sm font-medium text-gray-600">Total de Flashcards</div>
-            <div class="text-xs text-gray-400 mt-1">Cadastrados no sistema</div>
-        </div>
-        
-        <!-- Card Revisões Hoje -->
-        <div class="bg-white rounded-xl shadow-lg p-6 text-center border-l-4 border-green-500">
-            <div class="text-4xl font-bold text-green-600 mb-2" id="stats-revisoes-hoje">0</div>
-            <div class="text-sm font-medium text-gray-600">Para Revisar Hoje</div>
-            <div class="text-xs text-gray-400 mt-1">Cards vencidos</div>
-        </div>
-        
-        <!-- Card Taxa de Acerto -->
-        <div class="bg-white rounded-xl shadow-lg p-6 text-center border-l-4 border-purple-500">
-            <div class="text-4xl font-bold text-purple-600 mb-2" id="stats-taxa-acerto">0%</div>
-            <div class="text-sm font-medium text-gray-600">Taxa de Acerto</div>
-            <div class="text-xs text-gray-400 mt-1">Média geral</div>
-        </div>
-        
-        <!-- Card Nível Médio -->
-        <div class="bg-white rounded-xl shadow-lg p-6 text-center border-l-4 border-amber-500">
-            <div class="text-4xl font-bold text-amber-600 mb-2" id="stats-nivel-medio">0</div>
-            <div class="text-sm font-medium text-gray-600">Nível Médio</div>
-            <div class="text-xs text-gray-400 mt-1">Ebbinghaus</div>
-        </div>
-    </div>
-    
-    <!-- Gráfico de Distribuição de Níveis -->
-    <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-lg p-6 mb-8">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">Distribuição por Nível Ebbinghaus</h2>
-        <div id="nivel-distribution" class="space-y-3">
-            <!-- Barras serão geradas dinamicamente -->
-        </div>
-    </div>
-    
-    <!-- Cards por Idioma -->
-    <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-lg p-6 mb-8">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">Cards por Idioma</h2>
-        <div id="idioma-distribution" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <!-- Cards de idioma serão gerados dinamicamente -->
-        </div>
-    </div>
-    
-    <!-- Top 10 Flashcards Mais Revisados -->
-    <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-lg p-6 mb-8">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">Top 10 Flashcards Mais Revisados</h2>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Palavra</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Idioma</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revisões</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acertos</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxa</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nível</th>
-                    </tr>
-                </thead>
-                <tbody id="top-revisados-table" class="bg-white divide-y divide-gray-200">
-                    <!-- Linhas serão inseridas aqui -->
-                </tbody>
-            </table>
-        </div>
-    </div>
-    
-    <!-- Estatísticas Detalhadas por Flashcard -->
-    <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-lg p-6">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">Estatísticas Detalhadas</h2>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Palavra</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Idioma</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Criado em</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revisões</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acertos</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Erros</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxa</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acertos Seguidos</th>
-                    </tr>
-                </thead>
-                <tbody id="detailed-stats-table" class="bg-white divide-y divide-gray-200">
-                    <!-- Linhas serão inseridas aqui -->
-                </tbody>
-            </table>
-        </div>
-    </div>
-    
-    <div class="max-w-6xl mx-auto mt-8 text-center">
-        <button id="btn-back-from-estatisticas" class="mt-6 text-slate-400 hover:text-white font-medium transition duration-200">← Voltar</button>
-    </div>
-</div>
-
-</div>
-
-    <!-- Carrega o script principal da aplicação -->
-    <script type="module" src="script.js"></script>
-<!-- Adicione isto antes do fechamento do body -->
-<!-- Modal Sway (Substitui alert/confirm/prompt) -->
-<div id="sway-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
-    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        <!-- Overlay -->
-        <div id="sway-overlay" class="fixed inset-0 bg-black bg-opacity-70 transition-opacity"></div>
-        
-        <!-- Conteúdo do Modal -->
-        <div class="inline-block align-bottom bg-slate-800 rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-slate-700">
-            <!-- Cabeçalho -->
-            <div id="sway-header" class="px-6 pt-6 pb-4">
-                <div class="flex items-center justify-between">
-                    <h3 id="sway-title" class="text-xl font-bold text-white"></h3>
-                    <button id="sway-close" class="text-slate-400 hover:text-white transition">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
+            <div class="stat-box">
+                <div class="stat-item">
+                    <h3 id="sumTotal">0</h3>
+                    <p>Total</p>
                 </div>
-                <p id="sway-message" class="mt-2 text-slate-300"></p>
+                <div class="stat-item stat-correct">
+                    <h3 id="sumCorrect">0</h3>
+                    <p>Acertos</p>
+                </div>
+                <div class="stat-item stat-wrong">
+                    <h3 id="sumWrong">0</h3>
+                    <p>Erros</p>
+                </div>
             </div>
+
+            <button id="btnFinishSession" class="btn-action" style="background-color: #454E9E;">
+                Voltar ao Menu
+            </button>
+            <button id="btnRestartSession" class="btn-logout" style="margin-top: 10px; background: transparent; color: #999; border: 1px solid #eee;">
+                Revisar Tudo Novamente
+            </button>
+        </div>
+    </div>
+
+    <!-- CONTAINERS PARA O SISTEMA SWAY (MODAL E TOAST) -->
+    <div id="sway-container"></div>
+    <div id="sway-toast-container"></div>
+
+    <!-- 7. NOVA TELA: BIBLIOTECA -->
+    <!-- 7. TELA: BIBLIOTECA (Cole isso antes do </main>) -->
+    <div id="libraryPage" class="hidden center-content" style="justify-content: flex-start; background: #E2E8F0; padding: 0;">
+        
+        <!-- Cabeçalho Fixo -->
+        <div style="background: transparent; width: 100%; padding: 15px 20px; position: sticky; top: 0; z-index: 10;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <button id="btnBackLib" class="btn-back" style="margin:0; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                    <span class="material-icons" style="color:#454E9E">arrow_back</span>
+                </button>
+                <h2 style="margin: 0; color: #2D3748; font-size: 1.2rem;">Minha Biblioteca</h2>
+                
+                <!-- Botão de Estatísticas -->
+                <button id="btnOpenStats" style="border: none; background: white; color: #454E9E; width: 40px; height: 40px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                    <span class="material-icons">bar_chart</span>
+                </button>
+            </div>
+
+            <!-- Filtros e Pesquisa -->
+            <div class="search-row">
+                <div class="input-wrapper" style="background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                    <span class="material-icons">search</span>
+                    <input type="text" id="libSearch" placeholder="Buscar palavra...">
+                </div>
+                <select id="libFilter" style="box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: none;">
+                    <option value="all">Todos</option>
+                    <option value="new">Novos</option>
+                    <option value="learning">Estudando</option>
+                    <option value="mastered">Mestrados</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- LISTA DE CARDS (Onde o erro ocorria) -->
+        <div id="libList" class="library-list">
+            <!-- O JavaScript vai preencher isso aqui -->
+        </div>
+    </div>
+
+    <!-- 8. NOVA TELA: SOBRE -->
+    <div id="aboutPage" class="hidden center-content" style="justify-content: flex-start; background: #fff;">
+        
+        <!-- Cabeçalho -->
+        <div style="width: 100%; padding: 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; position: sticky; top: 0; background: white; z-index: 10;">
+             <button id="btnBackAbout" class="btn-back" style="margin:0;"><span class="material-icons">arrow_back</span></button>
+             <h2 style="margin: 0 0 0 15px; color: #333; font-size: 1.2rem;">Como Funciona</h2>
+        </div>
+
+        <!-- Conteúdo Explicativo (Scrollável) -->
+        <div class="about-content">
             
-            <!-- Corpo (para inputs, etc) -->
-            <div id="sway-body" class="px-6 py-4">
-                <input id="sway-input" type="text" class="hidden w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-indigo-500" placeholder="Digite aqui...">
+            <div class="about-section">
+                <h3>🚀 O que é este app?</h3>
+                <p>Este é um sistema de <strong>Flashcards Inteligentes</strong>. Ele utiliza o método de <em>Repetição Espaçada</em> para garantir que você memorize vocabulário ou conceitos de forma eficiente, revisando apenas na hora certa.</p>
             </div>
-            
-            <!-- Rodapé com botões -->
-            <div id="sway-footer" class="px-6 py-4 bg-slate-900/50 flex flex-col sm:flex-row gap-3 justify-end">
-                <!-- Botões serão inseridos dinamicamente aqui -->
+
+            <div class="about-section">
+                <h3>🧠 O Algoritmo (SRS)</h3>
+                <p>O sistema gerencia quando você deve rever cada palavra:</p>
+                <ul>
+                    <li><strong>Acertou?</strong> A palavra sobe de nível e a próxima revisão será agendada para uma data mais distante (amanhã, depois 3 dias, 7 dias...).</li>
+                    <li><strong>Errou?</strong> A palavra volta para o nível zero e deve ser revisada novamente hoje ou amanhã para fixação.</li>
+                </ul>
             </div>
+
+            <div class="about-section">
+                <h3>📚 Como usar?</h3>
+                <ol>
+                    <li><strong>Adicionar:</strong> Cadastre palavras novas com tradução e exemplos.</li>
+                    <li><strong>Revisar:</strong> O botão "Revisar" mostrará apenas o que venceu hoje. Tente acertar a tradução!</li>
+                    <li><strong>Forçar Revisão:</strong> Se não houver nada pendente, você pode "Forçar" uma revisão para estudar o baralho todo.</li>
+                    <li><strong>Biblioteca:</strong> Use para pesquisar palavras, ver seu progresso ou excluir itens errados.</li>
+                </ol>
+            </div>
+
+            <div class="about-section">
+                <h3>📊 Níveis de Domínio</h3>
+                <p>Na biblioteca, as cores indicam seu progresso:</p>
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <span class="lvl-tag lvl-0">Novos</span>
+                    <span class="lvl-tag lvl-mid">Aprendendo</span>
+                    <span class="lvl-tag lvl-high">Mestrados</span>
+                </div>
+            </div>
+
+            <p style="text-align: center; color: #999; margin-top: 30px; font-size: 0.8rem;">Versão 1.0 - Flashcards Mobile First</p>
         </div>
     </div>
-</div>
 
-<!-- Toast/Notificação -->
-<div id="sway-toast" class="hidden fixed bottom-4 right-4 z-50 bg-slate-800 border border-slate-700 text-white px-6 py-4 rounded-xl shadow-2xl max-w-sm transform transition-all duration-300 translate-y-10 opacity-0">
-    <div class="flex items-start">
-        <div id="sway-toast-icon" class="mr-3 mt-1"></div>
-        <div class="flex-1">
-            <p id="sway-toast-message" class="text-sm"></p>
+  </main>
+
+  <!-- 9. TELA DE ESTATÍSTICAS (OVERLAY) -->
+    <div id="statsPage" class="hidden stats-overlay">
+        <div class="stats-header">
+            <h2 style="margin:0; color: #2D3748;">Estatísticas</h2>
+            <button id="btnCloseStats" class="btn-back" style="margin:0; background: white;">
+                <span class="material-icons" style="color:#333">close</span>
+            </button>
         </div>
-        <button id="sway-toast-close" class="ml-4 text-slate-400 hover:text-white">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
+
+        <!-- Dashboard Grid -->
+        <div class="stats-grid-dashboard">
+            <div class="stat-card big-stat">
+                <div>
+                    <h3 id="statTotal" style="color: #454E9E;">0</h3>
+                    <p>Total de Cards</p>
+                </div>
+                <div style="height: 40px; width: 1px; background: #eee;"></div>
+                <div>
+                    <h3 id="statAccuracy">0%</h3>
+                    <p>Taxa de Retenção</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <h3 id="statNew" class="text-new">0</h3>
+                <p>Novos</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="statMaster" class="text-master">0</h3>
+                <p>Mestrados</p>
+            </div>
+        </div>
+
+        <!-- Barras de Progresso Detalhadas -->
+        <div class="progress-container">
+            <h4 style="margin-top:0; color:#4A5568; margin-bottom: 20px;">Distribuição de Domínio</h4>
+
+            <div class="progress-label"><span>Iniciante (Nível 0)</span> <span id="lblNew">0%</span></div>
+            <div class="progress-track"><div id="barNew" class="progress-fill bg-new" style="width: 0%"></div></div>
+
+            <div class="progress-label"><span>Aprendendo (Nível 1-4)</span> <span id="lblLearning">0%</span></div>
+            <div class="progress-track"><div id="barLearning" class="progress-fill bg-learning" style="width: 0%"></div></div>
+
+            <div class="progress-label"><span>Mestrado (Nível 5+)</span> <span id="lblMaster">0%</span></div>
+            <div class="progress-track"><div id="barMaster" class="progress-fill bg-master" style="width: 0%"></div></div>
+        </div>
+
+        <!-- Botão de Ação -->
+        <button id="btnCleanData" style="width: 100%; padding: 15px; border-radius: 12px; background: #FED7D7; color: #C53030; border: none; font-weight: bold; margin-top: 10px; cursor: pointer;">
+            <span class="material-icons" style="vertical-align: bottom; font-size: 1.1rem; margin-right: 5px;">delete_forever</span>
+            Limpar Toda a Biblioteca
         </button>
     </div>
-</div>
+
+  <script type="module" src="main.js"></script>
 </body>
 </html>
