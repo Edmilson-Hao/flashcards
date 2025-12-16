@@ -293,6 +293,117 @@ function showSummary() {
     showPage('summaryPage');
 }
 
+window.switchAddTab = (mode) => {
+    const form = document.getElementById('formAddCard');
+    const jsonSec = document.getElementById('jsonSection');
+    const tabMan = document.getElementById('tabManual');
+    const tabJson = document.getElementById('tabJson');
+
+    if (mode === 'manual') {
+        form.classList.remove('hidden');
+        jsonSec.classList.add('hidden');
+        tabMan.classList.add('active');
+        tabJson.classList.remove('active');
+    } else {
+        form.classList.add('hidden');
+        jsonSec.classList.remove('hidden');
+        tabMan.classList.remove('active');
+        tabJson.classList.add('active');
+    }
+};
+
+// 2. Copiar Modelo
+window.copyJsonModel = () => {
+    // Modelo completo solicitado
+    const fullModel = `[
+  {
+    "idiomaOriginal": "Chinês (Mandarim)",
+    "palavraOriginal": "你们",
+    "idiomaTraducao": "Português",
+    "traducao": "Vocês (plural)",
+    "exemplos": [
+      "你们好吗？(Nǐmen hǎo ma?)",
+      "你们想去哪里？(Nǐmen xiǎng qù nǎlǐ?)",
+      "你们是中国人吗？(Nǐmen shì Zhōngguó rén ma?)"
+    ]
+  },
+  {
+    "idiomaOriginal": "Alemão",
+    "palavraOriginal": "Guten Abend",
+    "idiomaTraducao": "Português",
+    "traducao": "Boa noite",
+    "exemplos": [
+      "Guten Abend, Herr Schmidt.",
+      "Guten Abend! Wie war Ihr Tag?"
+    ]
+  }
+]`;
+
+    navigator.clipboard.writeText(fullModel).then(() => {
+        Sway.showToast("Modelo copiado!", "success");
+    });
+};
+
+// 3. Processar JSON e Salvar
+window.processBatchJson = async () => {
+    const input = document.getElementById('jsonInput');
+    const btn = document.getElementById('btnProcessJson');
+    const rawText = input.value.trim();
+
+    if (!rawText) {
+        Sway.showToast("A caixa está vazia.", "error");
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = "Validando...";
+
+    try {
+        // Tenta converter texto em Objeto
+        const data = JSON.parse(rawText);
+
+        if (!Array.isArray(data)) {
+            throw new Error("O JSON deve ser uma lista [...] (Array).");
+        }
+
+        btn.innerText = `Salvando ${data.length} itens...`;
+        
+        // Loop para salvar um por um
+        let successCount = 0;
+        
+        for (const item of data) {
+            // Validação simples dos campos obrigatórios
+            if (!item.palavraOriginal || !item.traducao) continue;
+
+            // Prepara objeto igual ao manual
+            const newCard = {
+                idiomaOriginal: item.idiomaOriginal || "Indefinido",
+                palavraOriginal: item.palavraOriginal,
+                idiomaTraducao: item.idiomaTraducao || "Português",
+                traducao: item.traducao,
+                exemplos: Array.isArray(item.exemplos) ? item.exemplos : [],
+                createdAt: Timestamp.now(),
+                nextReview: Timestamp.now(),
+                reviewLevel: 0
+            };
+
+            await addDoc(flashcardsRef, newCard);
+            successCount++;
+        }
+
+        Sway.showToast(`${successCount} palavras importadas!`, "success");
+        input.value = ""; // Limpa
+        showPage('homePage');
+
+    } catch (e) {
+        console.error(e);
+        Sway.showToast("JSON Inválido: " + e.message, "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Processar Lote";
+    }
+};
+
 // --- EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
     // Botões Home
@@ -313,6 +424,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Botões Add
     const formAdd = document.getElementById('formAddCard');
     if(formAdd) formAdd.addEventListener('submit', (e) => { e.preventDefault(); saveFlashcard(); });
+
+    const tabMan = document.getElementById('tabManual');
+    if (tabMan) tabMan.addEventListener('click', () => switchAddTab('manual'));
+
+    const tabJson = document.getElementById('tabJson');
+    if (tabJson) tabJson.addEventListener('click', () => switchAddTab('json'));
+
+    // Botão Copiar Modelo
+    const btnCopy = document.getElementById('btnCopyModel');
+    if (btnCopy) btnCopy.addEventListener('click', copyJsonModel);
+
+    // Botão Processar JSON
+    const btnProc = document.getElementById('btnProcessJson');
+    if (btnProc) btnProc.addEventListener('click', processBatchJson);
     
     const btnBackAdd = document.getElementById('btnBackAdd');
     if(btnBackAdd) btnBackAdd.addEventListener('click', () => showPage('homePage'));
@@ -385,6 +510,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCleanData = document.getElementById('btnCleanData');
     if(btnCleanData) {
         btnCleanData.addEventListener('click', clearAllLibrary);
+    }
+
+    // Botão Resetar Progresso (NOVO)
+    const btnReset = document.getElementById('btnResetProgress');
+    if (btnReset) {
+        btnReset.addEventListener('click', resetAllProgress);
     }
 });
 
@@ -509,50 +640,122 @@ window.clearAllLibrary = async () => {
     }
 };
 
-// Função para calcular e mostrar estatísticas
+// Função para calcular e mostrar estatísticas Detalhadas
 function updateStatsUI() {
-    const total = allFlashcards.length;
+    // 1. Helpers seguros
+    const setText = (id, text) => { const el = document.getElementById(id); if (el) el.innerText = text; };
+    const container = document.getElementById('detailedStatsList');
     
+    if (!container) return; // Segurança
+
+    const total = allFlashcards.length;
+    setText('statTotal', total);
+    setText('lblTotalCards', total);
+
     if (total === 0) {
-        document.getElementById('statTotal').innerText = "0";
-        document.getElementById('statAccuracy').innerText = "0%";
-        // Zera o resto...
+        setText('statAccuracy', "0%");
+        setText('statNew', "0");
+        setText('statMaster', "0");
+        container.innerHTML = '<p style="text-align:center; color:#ccc; margin-top:20px;">Nenhum dado.</p>';
         return;
     }
 
-    let countNew = 0;
-    let countLearning = 0;
-    let countMaster = 0;
+    // 2. Contagem por Nível Individual
+    // Cria um array onde o índice é o nível (Ex: counts[0] = qtd de nível 0)
+    // Vamos suportar até nível 10 visualmente
+    const counts = new Array(11).fill(0); 
+    let maxLevelFound = 0;
 
     allFlashcards.forEach(c => {
-        const lvl = c.reviewLevel || 0;
-        if (lvl === 0) countNew++;
-        else if (lvl < 5) countLearning++;
-        else countMaster++;
+        let lvl = c.reviewLevel || 0;
+        // Se o nível for maior que 10, agrupa no 10
+        if (lvl > 10) lvl = 10; 
+        
+        counts[lvl]++;
+        if (lvl > maxLevelFound) maxLevelFound = lvl;
     });
 
-    // Cálculos
-    const pctNew = Math.round((countNew / total) * 100);
-    const pctLearn = Math.round((countLearning / total) * 100);
-    const pctMaster = Math.round((countMaster / total) * 100);
+    // 3. Atualiza KPIs do Topo (Mantivemos o resumo simples no topo)
+    // Nível 0 = Novos
+    // Nível 5+ = Mestrados
+    let countMaster = 0;
+    for (let i = 5; i <= 10; i++) countMaster += counts[i];
     
-    // Taxa de Retenção (Simulada baseada em quantos não são nível 0)
-    const retention = Math.round(((total - countNew) / total) * 100);
+    // Taxa de Retenção: (Total - Nível 0) / Total
+    const retention = Math.round(((total - counts[0]) / total) * 100);
 
-    // Atualiza DOM
-    document.getElementById('statTotal').innerText = total;
-    document.getElementById('statAccuracy').innerText = retention + "%";
+    setText('statNew', counts[0]);
+    setText('statMaster', countMaster);
+    setText('statAccuracy', retention + "%");
+
+    // 4. Gera a Lista Detalhada (HTML)
+    container.innerHTML = '';
     
-    document.getElementById('statNew').innerText = countNew;
-    document.getElementById('statMaster').innerText = countMaster;
+    // Define até qual nível mostrar (pelo menos até o 5, ou o máximo que o usuário atingiu)
+    const displayLimit = Math.max(5, maxLevelFound);
 
-    // Atualiza Barras
-    document.getElementById('barNew').style.width = pctNew + "%";
-    document.getElementById('lblNew').innerText = pctNew + "%";
+    for (let i = 0; i <= displayLimit; i++) {
+        const count = counts[i];
+        const percentage = Math.round((count / total) * 100);
+        
+        // Define a cor baseada no nível (0=Cinza, 1-4=Laranja/Amarelo, 5+=Verde)
+        let colorClass = `bg-lvl-${Math.min(i, 9)}`; 
+        
+        // Texto descritivo opcional
+        let label = i;
+        if (i === 10) label = "10+";
 
-    document.getElementById('barLearning').style.width = pctLearn + "%";
-    document.getElementById('lblLearning').innerText = pctLearn + "%";
-
-    document.getElementById('barMaster').style.width = pctMaster + "%";
-    document.getElementById('lblMaster').innerText = pctMaster + "%";
+        const row = document.createElement('div');
+        row.className = 'level-row';
+        row.innerHTML = `
+            <div class="lvl-badge-stat ${colorClass}">${label}</div>
+            <div class="level-track">
+                <div class="level-fill ${colorClass}" style="width: ${percentage}%"></div>
+            </div>
+            <div class="lvl-count">${count}</div>
+        `;
+        container.appendChild(row);
+    }
 }
+
+// Função para resetar o nível de todas as palavras para 0
+window.resetAllProgress = async () => {
+    // 1. Segurança básica
+    if (allFlashcards.length === 0) {
+        Sway.showToast("Biblioteca vazia.", "info");
+        return;
+    }
+
+    // 2. Confirmação
+    const confirm = await Sway.confirm(
+        "Resetar Progresso", 
+        "Isso fará com que TODAS as suas palavras voltem para o nível 'Novo' e apareçam para revisão imediata. Deseja continuar?"
+    );
+
+    if (!confirm) return;
+
+    // 3. Execução em Lote (Batch)
+    // Usamos writeBatch para ser rápido e atômico (tudo ou nada)
+    try {
+        const batch = writeBatch(db);
+        
+        allFlashcards.forEach(card => {
+            const cardRef = doc(flashcardsRef, card.id);
+            batch.update(cardRef, {
+                reviewLevel: 0,           // Volta para nível 0
+                nextReview: Timestamp.now() // Disponível para revisar agora
+            });
+        });
+
+        await batch.commit(); // Envia todas as alterações de uma vez
+        
+        Sway.showToast("Progresso resetado com sucesso!", "success");
+        
+        // Atualiza a tela de estatísticas visualmente
+        updateStatsUI(); 
+        
+    } catch (error) {
+        console.error("Erro ao resetar:", error);
+        Sway.showToast("Erro ao resetar progresso.", "error");
+    }
+};

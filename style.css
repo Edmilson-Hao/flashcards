@@ -619,3 +619,333 @@ button {
 .bg-learning { background-color: #DD6B20; }
 .text-master { color: #38A169; }
 .bg-master { background-color: #38A169; }
+
+/* =========================================
+   ESTATÍSTICAS DETALHADAS (NOVO)
+   ========================================= */
+
+/* Linha de cada nível */
+.level-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+}
+
+/* Badge do número do nível (Ex: "0", "1", "5") */
+.lvl-badge-stat {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.8rem;
+    color: white;
+    flex-shrink: 0;
+}
+
+/* Barra de progresso de fundo */
+.level-track {
+    flex: 1; /* Ocupa o espaço restante */
+    height: 8px;
+    background-color: #EDF2F7;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* Preenchimento da barra */
+.level-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+/* Contador numérico à direita */
+.lvl-count {
+    width: 30px;
+    text-align: right;
+    font-weight: 600;
+    color: #4A5568;
+    font-size: 0.85rem;
+}
+
+/* Cores Dinâmicas para os Níveis */
+.bg-lvl-0 { background-color: #A0AEC0; } /* Cinza */
+.bg-lvl-1 { background-color: #FBD38D; } /* Amarelo claro */
+.bg-lvl-2 { background-color: #F6AD55; } /* Laranja */
+.bg-lvl-3 { background-color: #ED8936; } /* Laranja escuro */
+.bg-lvl-4 { background-color: #DD6B20; } /* Ferrugem */
+.bg-lvl-5 { background-color: #68D391; } /* Verde claro */
+.bg-lvl-6 { background-color: #48BB78; } /* Verde */
+.bg-lvl-7 { background-color: #38A169; } /* Verde médio */
+.bg-lvl-8 { background-color: #2F855A; } /* Verde escuro */
+.bg-lvl-9 { background-color: #276749; } /* Verde floresta */
+
+/* =========================================
+   ESTILOS DA TELA ADICIONAR (ABAS & JSON)
+   ========================================= */
+
+/* Sistema de Abas */
+.add-tabs {
+    display: flex;
+    width: 100%;
+    background: #e2e8f0;
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 20px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    color: #64748b;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab-btn.active {
+    background: white;
+    color: #454E9E;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Área de Código JSON (Modelo) */
+.json-model-box {
+    background: #2d3748;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 15px;
+    border: 1px solid #4a5568;
+}
+
+.json-header {
+    background: #1a202c;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #a0aec0;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.btn-copy {
+    background: #4a5568;
+    border: none;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+}
+.btn-copy:hover { background: #718096; }
+
+.code-block {
+    margin: 0;
+    padding: 12px;
+    color: #48bb78; /* Cor de código "Hacker" */
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+/* Área de Input do JSON */
+textarea#jsonInput {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    background: #fff;
+    resize: vertical; /* Permite esticar verticalmente */
+    margin-bottom: 10px;
+}
+textarea#jsonInput:focus {
+    outline: none;
+    border-color: #454E9E;
+    box-shadow: 0 0 0 3px rgba(69, 78, 158, 0.1);
+}
+
+/* =========================================
+   UI MODERNIZADA - FORMULÁRIOS & ABAS
+   ========================================= */
+
+/* Transforma a tela de Adicionar em um Card Branco Limpo */
+#addPage {
+    background-color: white;
+    border-radius: 24px;
+    padding: 30px 25px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+    width: 100%;
+    /* Garante que o card não encoste nas bordas em telas pequenas */
+    box-sizing: border-box; 
+    align-self: flex-start; /* Evita esticar */
+}
+
+/* Títulos mais elegantes */
+#addPage h2 {
+    color: #2D3748;
+    font-weight: 700;
+    font-size: 1.4rem;
+    letter-spacing: -0.5px;
+}
+
+/* --- ABAS (TABS) --- */
+.add-tabs {
+    display: flex;
+    background: #F7FAFC; /* Fundo cinza bem claro */
+    padding: 6px;
+    border-radius: 16px;
+    margin-bottom: 25px;
+    border: 1px solid #EDF2F7;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    background: transparent;
+    border-radius: 12px;
+    color: #718096;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tab-btn.active {
+    background: white;
+    color: #454E9E; /* Cor da marca */
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); /* Sombra suave */
+    transform: scale(1.02);
+}
+
+/* --- INPUTS & LABELS --- */
+.input-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    font-size: 0.85rem;
+    color: #4A5568; /* Cinza escuro, legível */
+    margin-bottom: 8px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+input[type="text"], textarea#jsonInput {
+    width: 100%;
+    padding: 16px;
+    background-color: #F7FAFC;
+    border: 2px solid #EDF2F7; /* Borda sutil */
+    border-radius: 12px;
+    font-size: 1rem;
+    color: #2D3748;
+    transition: all 0.2s ease;
+}
+
+input[type="text"]::placeholder {
+    color: #A0AEC0;
+}
+
+input[type="text"]:focus, textarea#jsonInput:focus {
+    background-color: white;
+    border-color: #454E9E;
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(69, 78, 158, 0.1);
+}
+
+/* Input menor para exemplos */
+.input-example {
+    margin-bottom: 12px;
+    padding: 14px !important; /* Ligeiramente menor */
+    font-size: 0.95rem !important;
+}
+
+/* --- BOTÃO DE AÇÃO PRINCIPAL --- */
+.btn-save {
+    width: 100%;
+    background: linear-gradient(135deg, #454E9E 0%, #3b4285 100%);
+    color: white;
+    margin-top: 25px;
+    padding: 18px;
+    border-radius: 16px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    border: none;
+    box-shadow: 0 10px 20px rgba(69, 78, 158, 0.25);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-save:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 24px rgba(69, 78, 158, 0.3);
+}
+
+.btn-save:active {
+    transform: scale(0.98);
+}
+
+/* --- ÁREA DO JSON --- */
+.json-model-box {
+    background: #1A202C; /* Fundo escuro para código */
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.json-header {
+    background: #2D3748;
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #4A5568;
+}
+
+.json-header span {
+    color: #CBD5E0;
+    font-size: 0.75rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.code-block {
+    margin: 0;
+    padding: 15px;
+    color: #68D391; /* Verde Matrix */
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+
+.btn-copy {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    transition: background 0.2s;
+}
+.btn-copy:hover {
+    background: rgba(255,255,255,0.2);
+}

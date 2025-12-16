@@ -55,47 +55,81 @@
       <button id="btnLogout" class="btn-logout">Sair</button>
     </div>
 
-    <!-- 4. NOVA TELA: ADICIONAR FLASHCARD -->
+    <!-- 4. TELA: ADICIONAR FLASHCARD (Atualizada com Abas) -->
     <div id="addPage" class="hidden container-left">
-      <!-- Botão Voltar -->
-      <button id="btnBackAdd" class="btn-back">
-        <span class="material-icons">arrow_back</span> Voltar
-      </button>
-
-      <h2>Novo Flashcard</h2>
-      <p style="font-size: 0.9rem; margin-bottom: 20px;">Preencha os dados para criar o card.</p>
-
-      <form id="formAddCard">
-        <!-- Idiomas -->
-        <div class="input-group">
-            <label>Idioma Original (Aprendizado)</label>
-            <input type="text" id="langOriginal" placeholder="Ex: Inglês" value="Inglês">
+      <!-- Cabeçalho com Voltar -->
+        <div style="width: 100%; display: flex; align-items: center; margin-bottom: 25px;">
+            <button id="btnBackAdd" class="btn-back" style="margin:0; width: 40px; height: 40px; background: #F7FAFC; border-radius: 10px; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">
+                <span class="material-icons" style="color: #454E9E; margin:0;">arrow_back</span>
+            </button>
+            <h2 style="margin: 0 0 0 15px; color: #2D3748; font-size: 1.3rem;">Adicionar Palavras</h2>
         </div>
 
+      <!-- Abas de Seleção -->
+      <div class="add-tabs">
+          <button id="tabManual" class="tab-btn active">Manual</button>
+          <button id="tabJson" class="tab-btn">Lote (JSON)</button>
+      </div>
+
+      <!-- ABA 1: FORMULÁRIO MANUAL (O que já existia) -->
+      <form id="formAddCard" class="tab-content">
+        <div class="input-group">
+            <label>Idioma Original</label>
+            <input type="text" id="langOriginal" placeholder="Ex: Inglês" value="Inglês">
+        </div>
         <div class="input-group">
             <label>Palavra Original</label>
             <input type="text" id="wordOriginal" placeholder="Ex: Apple" required>
         </div>
-
         <div class="input-group">
-            <label>Idioma Tradução (Nativo)</label>
+            <label>Idioma Tradução</label>
             <input type="text" id="langTranslation" placeholder="Ex: Português" value="Português">
         </div>
-
         <div class="input-group">
             <label>Tradução</label>
             <input type="text" id="wordTranslation" placeholder="Ex: Maçã" required>
         </div>
-
         <hr class="divider">
         <label>3 Exemplos de frases:</label>
-        
         <input type="text" class="input-example" id="ex1" placeholder="Ex: I ate an apple." required>
         <input type="text" class="input-example" id="ex2" placeholder="Ex: Apple is red." required>
         <input type="text" class="input-example" id="ex3" placeholder="Ex: Give me an apple." required>
 
         <button type="submit" class="btn-save">Salvar Flashcard</button>
       </form>
+
+      <!-- ABA 2: IMPORTAR JSON (Novo) -->
+      <div id="jsonSection" class="tab-content hidden">
+          <p style="font-size: 0.9rem; color: #666; margin-bottom: 10px;">Cole uma lista de palavras no formato JSON abaixo.</p>
+          
+          <!-- Modelo para Copiar -->
+          <div class="json-model-box">
+              <div class="json-header">
+                  <span>Modelo Aceito</span>
+                  <button id="btnCopyModel" class="btn-copy"><span class="material-icons" style="font-size: 1rem;">content_copy</span> Copiar</button>
+              </div>
+              <pre id="modelText" class="code-block">[
+  {
+    "idiomaOriginal": "Chinês",
+    "palavraOriginal": "你好",
+    "idiomaTraducao": "Português",
+    "traducao": "Olá",
+    "exemplos": [
+      "你好吗？",
+      "你好！"
+    ]
+  }
+]</pre>
+          </div>
+
+          <!-- Área de Digitação -->
+          <label style="margin-top: 20px;">Cole seu JSON aqui:</label>
+          <textarea id="jsonInput" placeholder="Cole o array [...] aqui" rows="10"></textarea>
+
+          <button id="btnProcessJson" class="btn-save" style="background-color: #454E9E;">
+              Processar Lote
+          </button>
+      </div>
     </div>
 
     <!-- 5. TELA DE REVISÃO (MÚLTIPLA ESCOLHA) -->
@@ -243,7 +277,7 @@
 
   </main>
 
-  <!-- 9. TELA DE ESTATÍSTICAS (OVERLAY) -->
+    <!-- 9. TELA DE ESTATÍSTICAS (OVERLAY) -->
     <div id="statsPage" class="hidden stats-overlay">
         <div class="stats-header">
             <h2 style="margin:0; color: #2D3748;">Estatísticas</h2>
@@ -278,23 +312,35 @@
 
         <!-- Barras de Progresso Detalhadas -->
         <div class="progress-container">
-            <h4 style="margin-top:0; color:#4A5568; margin-bottom: 20px;">Distribuição de Domínio</h4>
+            <h4 style="margin-top:0; color:#4A5568; margin-bottom: 15px; display: flex; justify-content: space-between;">
+                Detalhes por Nível
+                <span style="font-size: 0.8rem; font-weight: normal; color: #a0aec0;">(Total: <span id="lblTotalCards">0</span>)</span>
+            </h4>
 
-            <div class="progress-label"><span>Iniciante (Nível 0)</span> <span id="lblNew">0%</span></div>
-            <div class="progress-track"><div id="barNew" class="progress-fill bg-new" style="width: 0%"></div></div>
-
-            <div class="progress-label"><span>Aprendendo (Nível 1-4)</span> <span id="lblLearning">0%</span></div>
-            <div class="progress-track"><div id="barLearning" class="progress-fill bg-learning" style="width: 0%"></div></div>
-
-            <div class="progress-label"><span>Mestrado (Nível 5+)</span> <span id="lblMaster">0%</span></div>
-            <div class="progress-track"><div id="barMaster" class="progress-fill bg-master" style="width: 0%"></div></div>
+            <!-- O JavaScript vai gerar as linhas aqui -->
+            <div id="detailedStatsList" style="max-height: 300px; overflow-y: auto; padding-right: 5px;">
+                <!-- Exemplo de como vai ficar (gerado via JS):
+                <div class="level-row">
+                    <span class="lvl-badge">Lvl 1</span>
+                    <div class="progress-track"><div class="progress-fill"></div></div>
+                    <span class="lvl-count">12</span>
+                </div>
+                -->
+            </div>
         </div>
 
-        <!-- Botão de Ação -->
-        <button id="btnCleanData" style="width: 100%; padding: 15px; border-radius: 12px; background: #FED7D7; color: #C53030; border: none; font-weight: bold; margin-top: 10px; cursor: pointer;">
-            <span class="material-icons" style="vertical-align: bottom; font-size: 1.1rem; margin-right: 5px;">delete_forever</span>
-            Limpar Toda a Biblioteca
-        </button>
+        <!-- BOTÕES DE AÇÃO -->
+        <div style="margin-top: 20px;">
+            <button id="btnResetProgress" style="width: 100%; padding: 15px; border-radius: 12px; background: #FEFCBF; color: #744210; border: none; font-weight: bold; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <span class="material-icons">restart_alt</span>
+                Resetar Progresso
+            </button>
+
+            <button id="btnCleanData" style="width: 100%; padding: 15px; border-radius: 12px; background: #FED7D7; color: #C53030; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <span class="material-icons">delete_forever</span>
+                Limpar Biblioteca
+            </button>
+        </div>
     </div>
 
   <script type="module" src="main.js"></script>
