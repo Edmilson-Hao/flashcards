@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mandarim Ebbinghaus Pro Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="dashboard">
+    <!-- SEÇÃO ESQUERDA: SISTEMA DE FLASHCARDS INTERATIVO -->
+    <div class="panel flashcard-section" id="card-panel">
+        <div class="badge" id="card-level">Nível 1</div>
+        
+        <div>
+            <div class="instruction" id="instruction-text">Carregando ecossistema mental...</div>
+            <div class="display-container">
+                <h1 class="main-prompt" id="main-display">...</h1>
+                <div class="sub-prompt" id="sub-display"></div>
+            </div>
+        </div>
+
+        <div>
+            <div class="interaction-area" id="input-zone"></div>
+            <div class="feedback" id="feedback-text"></div>
+        </div>
+    </div>
+
+    <!-- SEÇÃO DIREITA: DASHBOARD ANALÍTICO (EBBINGHAUS METRICS) -->
+    <div class="panel stats-section">
+        <div>
+            <h2 class="stats-header">
+                <span>Estatísticas de Retenção</span>
+                <span class="algo-badge">Algoritmo SM-2 Ativo</span>
+            </h2>
+            
+            <!-- Barra de Progresso de Domínio -->
+            <div class="progress-container">
+                <div class="progress-label">
+                    <span>Índice de Domínio Geral (Cards Nível 3)</span>
+                    <span id="progress-percent">0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="main-progress-bar"></div>
+                </div>
+            </div>
+
+            <!-- Distribuição de Níveis -->
+            <div class="level-distribution">
+                <div class="instruction" style="margin-bottom: 12px;">Distribuição de Carga por Nível</div>
+                <div class="level-row">
+                    <span class="level-name">Nível 1</span>
+                    <div class="level-bar-bg"><div class="level-bar-fill" id="bar-l1" style="background: #f87171;"></div></div>
+                    <span class="level-count" id="count-l1">0</span>
+                </div>
+                <div class="level-row">
+                    <span class="level-name">Nível 2</span>
+                    <div class="level-bar-bg"><div class="level-bar-fill" id="bar-l2" style="background: #fbbf24;"></div></div>
+                    <span class="level-count" id="count-l2">0</span>
+                </div>
+                <div class="level-row">
+                    <span class="level-name">Nível 3</span>
+                    <div class="level-bar-bg"><div class="level-bar-fill" id="bar-l3" style="background: #4ade80;"></div></div>
+                    <span class="level-count" id="count-l3">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cards de Métricas Avançadas -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">Total de Palavras</div>
+                <div class="metric-value" id="stat-total">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Aguardando Revisão</div>
+                <div class="metric-value" id="stat-due" style="color: #fbbf24;">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Fator de Facilidade Médio</div>
+                <div class="metric-value" id="stat-ef" style="font-size: 1.5rem;">0.0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Previsão de Retenção</div>
+                <div class="metric-value" id="stat-retention" style="color: #4ade80;">0%</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
