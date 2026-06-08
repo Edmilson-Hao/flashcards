@@ -80,23 +80,81 @@ const SoundFeedback = {
 };
 
 // ============================================================================
-// 3. INICIALIZAÇÃO DO APP E FUSÃO DE DADOS
+// 3. INICIALIZAÇÃO DO APP E FUSÃO DE DADOS (COM TRATAMENTO DE ERROS ROBUSTO)
 // ============================================================================
+function saveToLocalStorage() {
+    const progressToSave = {};
+    appState.cards.forEach(card => {
+        progressToSave[card.hanzi] = {
+            level: card.level,
+            nextReview: card.nextReview,
+            easiness: card.easiness,
+            repetitions: card.repetition || card.repetitions || 0
+        };
+    });
+    
+    localStorage.setItem('flashcards_progress', JSON.stringify(progressToSave));
+    localStorage.setItem('flashcards_config', JSON.stringify({
+        streak: appState.streak,
+        lastStudyDate: appState.lastStudyDate,
+        dailyGoalMinutes: appState.dailyGoalMinutes,
+        timeStudiedToday: appState.timeStudiedToday,
+        lastActiveDate: appState.lastActiveDate
+    }));
+}
+
 async function initApp(newDataFile) {
     let dataArray = newDataFile;
     if (!dataArray && window.dados_palavras) dataArray = window.dados_palavras;
+    
     if (!dataArray) {
         try {
             const response = await fetch('words.json');
-            dataArray = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(`Erro de Rede: Não foi possível acessar o arquivo 'words.json' (Status: ${response.status} - ${response.statusText})`);
+            }
+            
+            const textData = await response.text();
+            try {
+                dataArray = JSON.parse(textData);
+            } catch (jsonError) {
+                throw new Error(`JSON Corrompido: Existe um erro de sintaxe ou caractere inválido dentro do seu 'words.json'.<br><small style="color: #ef4444;">Detalhe técnico: ${jsonError.message}</small>`);
+            }
+
         } catch(e) {
-            dataArray = [];
+            const display = document.getElementById('main-display');
+            const instructionText = document.getElementById('instruction-text');
+            const inputZone = document.getElementById('input-zone');
+            
+            if (instructionText) instructionText.innerText = "FALHA CRÍTICA DE INICIALIZAÇÃO";
+            if (display) {
+                display.style.fontSize = "1.5rem";
+                display.style.color = "#f43f5e";
+                display.innerHTML = `⚠️ Falha ao Carregar Dados`;
+            }
+            if (inputZone) {
+                inputZone.innerHTML = `
+                    <div style="background: #1e293b; border: 2px solid #e11d48; padding: 20px; border-radius: 12px; color: #cbd5e1; font-family: sans-serif; text-align: left; line-height: 1.6; font-size: 0.95rem; width: 100%; box-sizing: border-box;">
+                        <p style="margin-top: 0; font-weight: bold; color: #f43f5e;">O aplicativo não conseguiu iniciar porque:</p>
+                        <p style="background: #0f172a; padding: 12px; border-radius: 6px; border-left: 4px solid #e11d48; font-family: monospace; font-size: 0.9rem; color: #fda4af; overflow-x: auto;">
+                            ${e.message}
+                        </p>
+                        <ul style="margin-bottom: 0; padding-left: 20px; font-size: 0.85rem; color: #94a3b8;">
+                            <li>Verifique se o arquivo <strong>words.json</strong> está na mesma pasta raiz.</li>
+                            <li>Se editou o arquivo recentemente, verifique se esqueceu alguma vírgula ou aspas.</li>
+                            <li>Certifique-se que está a rodar a aplicação através de um servidor local (Live Server).</li>
+                        </ul>
+                    </div>
+                `;
+            }
+            return;
         }
     }
 
     if (!dataArray || dataArray.length === 0) {
         const display = document.getElementById('main-display');
-        if (display) display.innerText = "Sem dados";
+        if (display) display.innerText = "Banco de dados vazio";
         return;
     }
 
@@ -120,14 +178,18 @@ async function initApp(newDataFile) {
     appState.cards = dataArray.map(wordData => {
         const savedProgress = localProgress[wordData.hanzi]; 
         if (savedProgress) {
-            return { ...wordData, ...savedProgress };
+            return { 
+                ...wordData, 
+                ...savedProgress,
+                repetition: savedProgress.repetitions || savedProgress.repetition || 0 
+            };
         }
         return { 
             ...wordData, 
             level: 0, 
             nextReview: Date.now(), 
             easiness: 2.5, 
-            repetitions: 0 
+            repetition: 0 
         };
     });
 
@@ -138,6 +200,7 @@ async function initApp(newDataFile) {
     updateTimerUI();
     updateStatisticsUI();
     nextCard(); 
+    initKeyboardShortcuts();
 }
 
 function injectOptionsDashboard() {
@@ -178,29 +241,8 @@ function injectOptionsDashboard() {
     }
 }
 
-function saveToLocalStorage() {
-    const progressToSave = {};
-    appState.cards.forEach(card => {
-        progressToSave[card.hanzi] = {
-            level: card.level,
-            nextReview: card.nextReview,
-            easiness: card.easiness,
-            repetitions: card.repetitions
-        };
-    });
-    
-    localStorage.setItem('flashcards_progress', JSON.stringify(progressToSave));
-    localStorage.setItem('flashcards_config', JSON.stringify({
-        streak: appState.streak,
-        lastStudyDate: appState.lastStudyDate,
-        dailyGoalMinutes: appState.dailyGoalMinutes,
-        timeStudiedToday: appState.timeStudiedToday,
-        lastActiveDate: appState.lastActiveDate
-    }));
-}
-
 // ============================================================================
-// 4. MODIFICADO: ALTERAÇÃO 1, 2 E 3 - FILTRAGEM, PRIORIDADE E ALEATORIEDADE
+// 4. FILTRAGEM, PRIORIDADE E ALEATORIEDADE
 // ============================================================================
 function nextCard() {
     const totalCards = appState.cards.length;
@@ -213,7 +255,6 @@ function nextCard() {
     }
 
     const now = Date.now();
-    // Filtra apenas os que precisam de revisão
     let reviewQueue = appState.cards.filter(c => c.nextReview <= now && c.level <= 3);
     
     if (reviewQueue.length === 0) {
@@ -221,18 +262,13 @@ function nextCard() {
         return;
     }
 
-    // 1. Encontra qual o menor nível disponível na fila atual para priorização estrita (Alteração 1)
     let lowestLevelAvailable = Math.min(...reviewQueue.map(c => c.level));
-    
-    // 2. Isola apenas os cards que pertencem a esse menor nível
     let targetLevelPool = reviewQueue.filter(c => c.level === lowestLevelAvailable);
 
-    // 3. Aplica a Regra de Não Repetição Imediata se houver alternativas (Alteração 3)
     let finalSelectionPool = targetLevelPool;
     if (targetLevelPool.length > 1 && appState.lastViewedCardHanzi) {
         finalSelectionPool = targetLevelPool.filter(c => c.hanzi !== appState.lastViewedCardHanzi);
     } 
-    // Fallback: Se só sobrou a mesma palavra no nível mais baixo, tenta buscar uma palavra de nível subsequente para quebrar o ritmo
     else if (targetLevelPool.length === 1 && appState.lastViewedCardHanzi && targetLevelPool[0].hanzi === appState.lastViewedCardHanzi) {
         let fallbackPool = reviewQueue.filter(c => c.hanzi !== appState.lastViewedCardHanzi);
         if (fallbackPool.length > 0) {
@@ -240,41 +276,51 @@ function nextCard() {
         }
     }
 
-    // 4. Seleciona um card aleatório de dentro do pool filtrado (Alteração 2)
     const randomIndex = Math.floor(Math.random() * finalSelectionPool.length);
     appState.currentCard = finalSelectionPool[randomIndex];
-    
-    // Atualiza o rastreador de histórico
     appState.lastViewedCardHanzi = appState.currentCard.hanzi;
 
     renderFlashcard(appState.currentCard);
 }
 
+// ============================================================================
+// 5. PROCESSAMENTO ALGORITMO SM-2 RECALIBRADO
+// ============================================================================
 function processSM2Response(isCorrect) {
+    if (!appState.currentCard) return;
+
     let card = appState.currentCard;
-    if (!card) return;
+    const quality = isCorrect ? 5 : 2;
 
     if (isCorrect) {
-        if (card.repetitions === 0) {
-            card.nextReview = Date.now() + 86400000; 
-        } else if (card.repetitions === 1) {
-            card.nextReview = Date.now() + (6 * 86400000); 
+        if (!card.repetition) card.repetition = 0;
+        
+        if (card.repetition === 0) {
+            card.interval = 1; 
+        } else if (card.repetition === 1) {
+            card.interval = 3; 
         } else {
-            const days = Math.round((card.repetitions - 1) * card.easiness);
-            card.nextReview = Date.now() + (days * 86400000);
+            card.interval = Math.ceil(card.interval * card.easiness);
         }
-        card.repetitions++;
-        card.level++; 
-        card.easiness = card.easiness + (0.1 - 0 * (0.08 + 0 * 0.02));
+        card.repetition += 1;
+        
+        if (card.level < 2) {
+            card.level += 1;
+        }
     } else {
-        card.repetitions = 0;
-        // Mantém elegível para revisão imediata nesta sessão, mas a lógica do nextCard() impedirá repetição consecutiva
-        card.nextReview = Date.now(); 
+        card.repetition = 0;
+        card.interval = 1; 
         card.level = 0;
-        card.easiness = card.easiness + (0.1 - 4 * (0.08 + 4 * 0.02));
     }
 
+    let scoreMod = (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+    card.easiness = (card.easiness || 2.5) + scoreMod;
+
     if (card.easiness < 1.3) card.easiness = 1.3;
+    if (card.easiness > 2.5) card.easiness = 2.5;
+
+    // Calcula timestamp do próximo dia de revisão baseado no intervalo
+    card.nextReview = Date.now() + (card.interval * 24 * 60 * 60 * 1000);
 
     saveToLocalStorage();
     updateStatisticsUI();
@@ -282,7 +328,27 @@ function processSM2Response(isCorrect) {
 }
 
 // ============================================================================
-// 5. RENDERIZAÇÃO
+// 6. ATALHOS DE TECLADO
+// ============================================================================
+function initKeyboardShortcuts() {
+    window.removeEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener('keydown', handleGlobalKeyDown);
+}
+
+function handleGlobalKeyDown(e) {
+    if (!appState.currentCard || appState.currentCard.level !== 0) return;
+
+    if (['1', '2', '3', '4'].includes(e.key)) {
+        const index = parseInt(e.key) - 1; 
+        const buttons = document.querySelectorAll('#input-zone button');
+        if (buttons && buttons[index]) {
+            buttons[index].click();
+        }
+    }
+}
+
+// ============================================================================
+// 7. RENDERIZAÇÃO DOS FLASHCARDS
 // ============================================================================
 function renderFlashcard(card) {
     const mainDisplay = document.getElementById('main-display');
@@ -299,43 +365,60 @@ function renderFlashcard(card) {
         cardLevel.innerText = `Nível ${card.level + 1}`;
     }
 
+    // NÍVEL 1: RECONHECIMENTO VISUAL (MÚLTIPLA ESCOLHA)
     if (card.level === 0) {
-        if (instructionText) instructionText.innerText = "RECONHECIMENTO VISUAL: SELECIONE A TRADUÇÃO CORRETA:";
+        if (instructionText) instructionText.innerText = "RECONHECIMENTO VISUAL: SELECIONE A TRADUÇÃO CORRETA (OU USE AS TECLAS 1, 2, 3, 4):";
         if (mainDisplay) mainDisplay.innerText = card.hanzi;
 
-        let options = [card.traducao];
-        let pool = appState.wrongAnswersPool.filter(t => t !== card.traducao);
-        
-        while (options.length < Math.min(4, appState.wrongAnswersPool.length)) {
-            let randIdx = Math.floor(Math.random() * pool.length);
-            let picked = pool.splice(randIdx, 1)[0];
-            if (picked && !options.includes(picked)) options.push(picked);
+        const correctAns = card.traducao;
+        const optionsSet = new Set([correctAns]);
+        const pool = appState.wrongAnswersPool || [];
+        const poolLength = pool.length;
+        const targetSize = Math.min(4, poolLength);
+
+        let attempts = 0;
+        while (optionsSet.size < targetSize && attempts < 50) {
+            attempts++;
+            const randIdx = Math.floor(Math.random() * poolLength);
+            const picked = pool[randIdx];
+            if (picked && picked !== correctAns) {
+                optionsSet.add(picked);
+            }
         }
+
+        while (optionsSet.size < Math.min(4, poolLength + 1) && optionsSet.size < 4) {
+            optionsSet.add("---");
+        }
+
+        let options = Array.from(optionsSet);
         options.sort(() => Math.random() - 0.5);
 
         if (inputZone) {
             inputZone.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%;">
-                    ${options.map(opt => `
-                        <button onclick="checkLevel1Answer('${opt.replace(/'/g, "\\'")}')" class="action-btn" style="background: #334155; padding: 14px; border-radius: 8px; color: white; border: none; font-weight: 500; cursor: pointer; transition: background 0.2s;">${opt}</button>
+                <div class="options-grid">
+                    ${options.map((opt, index) => `
+                        <button onclick="checkLevel1Answer('${opt.replace(/'/g, "\\'")}')" class="option-btn">
+                            <span class="shortcut-badge">${index + 1}</span>
+                            <span class="option-text">${opt}</span>
+                        </button>
                     `).join('')}
                 </div>
             `;
         }
     } 
+    // NÍVEL 2: FIXAÇÃO FONÉTICA (INPUT DEL PINYIN)
     else if (card.level === 1) {
         if (instructionText) instructionText.innerText = "FIXAÇÃO FONÉTICA: DIGITE O PINYIN CORRESPONDENTE COM O TOM (Ex: lao3shi1):";
         if (mainDisplay) mainDisplay.innerText = card.hanzi;
 
         if (inputZone) {
             inputZone.innerHTML = `
-                <div style="width: 100%;">
-                    <input type="text" id="pinyin-input" placeholder="Ex: xue2sheng5" autocomplete="off" style="width: 100%; padding: 16px; background: #0f172a; border: 2px solid #334155; border-radius: 10px; color: #fff; font-size: 1.3rem; text-align: center; box-sizing: border-box; margin-bottom: 16px;" />
-                    <button onclick="checkLevel2Answer()" class="action-btn" style="width: 100%; background: #0284c7; padding: 14px; border-radius: 8px; color: white; border: none; font-weight: bold; cursor: pointer;">Verificar Resposta</button>
-                    
-                    <div style="margin-top: 20px; text-align: center;">
-                        <span style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 6px;">Guia de Tons de Referência:</span>
-                        <img src="tons.png" alt="Tons Mandarim" style="max-width: 100%; max-height: 140px; border-radius: 8px; border: 1px solid #334155; padding: 4px; background: #ffffff;" />
+                <div class="input-wrapper">
+                    <input type="text" id="pinyin-input" class="text-input-field pinyin-field" placeholder="Ex: xue2sheng5" autocomplete="off" />
+                    <button onclick="checkLevel2Answer()" class="submit-btn btn-pinyin">Verificar Resposta</button>
+                    <div class="tone-guide-box">
+                        <span class="tone-guide-title">Guia de Tons de Referência:</span>
+                        <img src="tons.png" class="tone-guide-img" alt="Tons Mandarim" />
                     </div>
                 </div>
             `;
@@ -349,6 +432,7 @@ function renderFlashcard(card) {
             }
         }
     }
+    // NÍVEL 3: MANDARIM VISUAL (INPUT DEL HANZI)
     else if (card.level === 2) {
         if (instructionText) instructionText.innerText = "MANDARIM VISUAL: COM O TECLADO CHINÊS ATIVADO, DIGITE OS CARACTERES:";
         if (mainDisplay) mainDisplay.innerText = card.traducao;
@@ -356,9 +440,9 @@ function renderFlashcard(card) {
 
         if (inputZone) {
             inputZone.innerHTML = `
-                <div style="width: 100%;">
-                    <input type="text" id="hanzi-input" placeholder="Digite nihao -> converta para 你好" autocomplete="off" style="width: 100%; padding: 16px; background: #0f172a; border: 2px solid #334155; border-radius: 10px; color: #fff; font-size: 1.5rem; text-align: center; box-sizing: border-box; margin-bottom: 16px;" />
-                    <button onclick="checkLevel3Answer()" class="action-btn" style="width: 100%; background: #10b981; padding: 14px; border-radius: 8px; color: white; border: none; font-weight: bold; cursor: pointer;">Validar Caracteres</button>
+                <div class="input-wrapper">
+                    <input type="text" id="hanzi-input" class="text-input-field hanzi-field" placeholder="Digite nihao -> converta para 你好" autocomplete="off" />
+                    <button onclick="checkLevel3Answer()" class="submit-btn btn-hanzi">Validar Caracteres</button>
                 </div>
             `;
 
@@ -374,7 +458,7 @@ function renderFlashcard(card) {
 }
 
 // ============================================================================
-// TRIGGERS DE VALIDAÇÃO
+// 8. VERIFICAÇÕES DE RESPOSTAS E FEEDBACKS
 // ============================================================================
 function checkLevel1Answer(selectedOption) {
     const feedbackText = document.getElementById('feedback-text');
@@ -382,16 +466,17 @@ function checkLevel1Answer(selectedOption) {
 
     if (isCorrect) {
         SoundFeedback.playSuccess();
+        triggerStreakUpdate();
         if (feedbackText) {
             feedbackText.style.color = "#10b981";
-            feedbackText.innerText = "Correto! Palavra promovida para o Nível 2.";
+            feedbackText.innerText = `Correto! Palavra promovida para o Nível ${appState.currentCard.level + 2} (Fixação Fonética).`;
         }
-        setTimeout(() => processSM2Response(true), 1000);
+        setTimeout(() => processSM2Response(true), 1200);
     } else {
         SoundFeedback.playError();
         if (feedbackText) {
             feedbackText.style.color = "#ef4444";
-            feedbackText.innerText = `Incorreto! Mantida no Nível 1. Resposta: ${appState.currentCard.traducao}`;
+            feedbackText.innerText = `Incorreto! Retornada ao Nível 1. Resposta: ${appState.currentCard.traducao}`;
         }
         setTimeout(() => processSM2Response(false), 2000);
     }
@@ -407,9 +492,10 @@ function checkLevel2Answer() {
     
     if (userInput === correctTargetNumeric) {
         SoundFeedback.playSuccess();
+        triggerStreakUpdate();
         if (feedbackText) {
             feedbackText.style.color = "#10b981";
-            feedbackText.innerText = "Correto! Elevada ao Nível 3.";
+            feedbackText.innerText = `Correto! Palavra promovida para o Nível ${appState.currentCard.level + 2} (Mandarim Visual).`;
         }
         setTimeout(() => processSM2Response(true), 1200);
     } else {
@@ -432,9 +518,10 @@ function checkLevel3Answer() {
 
     if (userInput === correctTargetHanzi) {
         SoundFeedback.playSuccess();
+        triggerStreakUpdate();
         if (feedbackText) {
             feedbackText.style.color = "#10b981";
-            feedbackText.innerText = "Perfeito! Palavra de nível máximo (Domínio).";
+            feedbackText.innerText = "Perfeito! Palavra elevada ao Nível 4 (Domínio Concluído).";
         }
         setTimeout(() => processSM2Response(true), 1200);
     } else {
@@ -493,21 +580,35 @@ function showLockScreen(message) {
 }
 
 // ============================================================================
-// 6. TIMER E MONITOR DE OFENSIVAS
+// 9. TIMER E MONITOR DE OFENSIVAS
 // ============================================================================
 function startStudyTimer() {
-    if (studyTimer) clearInterval(studyTimer);
-    
+    if (studyTimer) {
+        clearInterval(studyTimer);
+        studyTimer = null;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (appState.lastActiveDate !== todayStr) {
+        appState.timeStudiedToday = 0;
+        appState.lastActiveDate = todayStr;
+    }
+
     studyTimer = setInterval(() => {
-        appState.timeStudiedToday++;
-        saveToLocalStorage();
-        updateTimerUI();
-        
-        const targetSeconds = appState.dailyGoalMinutes * 60;
-        if (appState.timeStudiedToday === targetSeconds) {
-            triggerStreakUpdate();
-            showNotification("Meta Diária Batida! 🔥", `Excelente! Meta concluída.`);
+        const currentCheckDate = new Date().toISOString().split('T')[0];
+        if (appState.lastActiveDate !== currentCheckDate) {
+            appState.timeStudiedToday = 0;
+            appState.lastActiveDate = currentCheckDate;
         }
+
+        appState.timeStudiedToday++;
+        
+        // Sincroniza o salvamento a cada 5 segundos para não sobrecarregar o disco
+        if (appState.timeStudiedToday % 5 === 0) {
+            saveToLocalStorage();
+        }
+
+        updateTimerUI();
     }, 1000);
 }
 
@@ -576,13 +677,13 @@ function updateStatisticsUI() {
 
     if (totalCards === 0) return;
 
-    const lvl1 = appState.cards.filter(c => c.level === 1).length;
-    const lvl2 = appState.cards.filter(c => c.level === 2).length;
-    const lvl3 = appState.cards.filter(c => c.level === 3).length; 
-    const lvlM = appState.cards.filter(c => c.level > 3).length; 
+    const lvl1 = appState.cards.filter(c => c.level === 0).length;
+    const lvl2 = appState.cards.filter(c => c.level === 1).length;
+    const lvl3 = appState.cards.filter(c => c.level === 2).length; 
+    const lvlM = appState.cards.filter(c => c.level > 2).length; 
 
     const now = Date.now();
-    const dueCount = appState.cards.filter(c => c.nextReview <= now && c.level <= 3).length;
+    const dueCount = appState.cards.filter(c => c.nextReview <= now && c.level <= 2).length;
 
     const statDue = document.getElementById('stat-due');
     if (statDue) statDue.innerText = dueCount;
@@ -625,6 +726,7 @@ function showNotification(title, body) {
     }
 }
 
+// Inicialização segura quando a página carrega completamente
 window.addEventListener('DOMContentLoaded', () => {
     initApp();
 });

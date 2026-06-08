@@ -1,0 +1,24 @@
+{
+  "name": "Flashcards de Mandarim",
+  "short_name": "Mandarim App",
+  "description": "Aplicativo de repetição espaçada para estudo de caracteres chineses.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#1e293b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
